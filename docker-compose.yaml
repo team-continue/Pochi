@@ -1,0 +1,31 @@
+services:
+  pochi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pochi:latest
+    container_name: pochi_container
+    tty: true
+    stdin_open: true
+    ipc: host
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - XDG_RUNTIME_DIR=/tmp/runtime/
+      - ROS_DOMAIN_ID=0
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+      - .:/ros2_ws/src/
+      - ros2_install_data:/ros2_ws/install
+      - ros2_build_data:/ros2_ws/build
+      - ~/rosbag:/rosbag
+
+    working_dir: /ros2_ws
+    command: bash -c "sleep infinity"
+
+volumes:
+  ros2_install_data:
+  ros2_build_data:
