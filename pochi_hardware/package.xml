@@ -4,7 +4,7 @@
   <name>pochi_hardware</name>
   <version>0.0.0</version>
   <description>Hardware interface for the Pochi</description>
-  <maintainer email="pizac.twitter@gmail.com">pizac</maintainer>
+  <maintainer email="team-continue@users.noreply.github.com">team-continue</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>

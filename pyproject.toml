@@ -1,0 +1,29 @@
+[project]
+name = "pochi-hardware-tools"
+version = "0.1.0"
+description = "USB and UDP tools for the Pochi Teensy hardware controller"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.116",
+  "pyserial>=3.5",
+  "uvicorn[standard]>=0.35",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+]
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["hardware/client/pochi_client"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "hardware/client", "pochi_hardware/src"]
+testpaths = ["hardware/test", "pochi_hardware/test"]

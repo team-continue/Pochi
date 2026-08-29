@@ -1,0 +1,26 @@
+[Unit]
+Description=Configure Jetson Orin Nano 40-pin header SPI0 for Pochi
+After=local-fs.target
+ConditionPathExists=/dev/mem
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Header pin 23 / Tegra SPI1_SCK: SFIO output
+ExecStart=/usr/bin/busybox devmem 0x0243d028 32 0x00000400
+# Header pin 21 / Tegra SPI1_MISO: SFIO input
+ExecStart=/usr/bin/busybox devmem 0x0243d018 32 0x00000450
+# Header pin 19 / Tegra SPI1_MOSI: SFIO output
+ExecStart=/usr/bin/busybox devmem 0x0243d040 32 0x00000400
+# Header pin 24 / Tegra SPI1_CS0: SFIO output
+ExecStart=/usr/bin/busybox devmem 0x0243d008 32 0x00000400
+
+# Restore the pad values captured on the development Orin.
+ExecStop=/usr/bin/busybox devmem 0x0243d028 32 0x00001054
+ExecStop=/usr/bin/busybox devmem 0x0243d018 32 0x00000054
+ExecStop=/usr/bin/busybox devmem 0x0243d040 32 0x00000054
+ExecStop=/usr/bin/busybox devmem 0x0243d008 32 0x00000058
+
+[Install]
+WantedBy=multi-user.target

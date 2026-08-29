@@ -44,6 +44,18 @@ qtcreator-*
 
 *~
 
+# Local Python and embedded build outputs
+.venv/
+.pytest_cache/
+__pycache__/
+.pio/
+.DS_Store
+tmp/
+.history/
+*.bak
+*.pdf
+pochi_hardware/stm/g431_test/
+
 # Emacs
 .#*
 

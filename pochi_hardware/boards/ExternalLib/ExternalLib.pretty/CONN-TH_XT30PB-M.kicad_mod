@@ -1,0 +1,232 @@
+(footprint "CONN-TH_XT30PB-M"
+	(version 20240108)
+	(generator "pcbnew")
+	(generator_version "8.0")
+	(layer "F.Cu")
+	(descr "CONN-TH_XT30PB-M footprint")
+	(tags "CONN-TH_XT30PB-M footprint C19268029")
+	(property "Reference" "REF**"
+		(at -0.200089 -4.6 0)
+		(layer "F.SilkS")
+		(uuid "8144b869-0d0d-4dbd-b154-330fd35e46d2")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "CONN-TH_XT30PB-M"
+		(at -0.200089 4.6 0)
+		(layer "F.Fab")
+		(uuid "6d65cfd4-988f-4ab4-96b0-1ed763865f70")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Footprint" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "c94f4be7-9f36-42eb-8f3f-3c5e94b3562c")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "8156cfd8-9d38-4e01-92c4-812755c0fcc9")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "e62711d4-63f1-4841-b271-7ba293d825e8")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr through_hole)
+	(fp_line
+		(start -8.000178 -0.349911)
+		(end -7.172009 -0.349911)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "18b898b8-eabd-4f55-821d-4631700c0c4d")
+	)
+	(fp_line
+		(start -8.000051 0.35014)
+		(end -8.000178 -0.349911)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "006ea1a9-35aa-47e7-ada4-1fd9145f395a")
+	)
+	(fp_line
+		(start -7.3 0.350013)
+		(end -8.000051 0.35014)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "0179bd93-18b1-4c34-b7ed-5c2146687cea")
+	)
+	(fp_line
+		(start -7.127991 -2.6)
+		(end 6.772009 -2.6)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "65f29435-b757-4584-89c7-93701d293057")
+	)
+	(fp_line
+		(start -7.127991 2.6)
+		(end -7.127991 -2.59299)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "d997b11f-72d7-4fb1-8a5c-3f628cb943ed")
+	)
+	(fp_line
+		(start 6.772009 -2.6)
+		(end 6.772009 2.6)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "fefb2a32-a04c-42c5-9e58-b13de7da6d04")
+	)
+	(fp_line
+		(start 6.772009 2.6)
+		(end -7.127991 2.6)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "7f846e72-5de8-4011-ad3b-f7e989a54a7c")
+	)
+	(fp_line
+		(start 6.9 -0.349987)
+		(end 7.6 -0.349987)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "a6f37eaf-4581-44d1-860d-dee3c3615c32")
+	)
+	(fp_line
+		(start 7.6 -0.349987)
+		(end 7.6 0.350013)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "5a36de09-1917-456d-b893-63948b5a96a4")
+	)
+	(fp_line
+		(start 7.6 0.350013)
+		(end 6.772009 0.350013)
+		(stroke
+			(width 0.254)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "69f4576e-bc91-4fc9-8b00-2cbd25978479")
+	)
+	(fp_circle
+		(center 6.772212 -2.599949)
+		(end 6.802184 -2.599949)
+		(stroke
+			(width 0.059995)
+			(type solid)
+		)
+		(fill none)
+		(layer "F.SilkS")
+		(uuid "76bf3b8f-6bc2-4932-9dec-58f09c09f7e5")
+	)
+	(fp_text user "REF**"
+		(at -0.200089 6.6 0)
+		(layer "F.Fab")
+		(uuid "59210fef-5647-41cc-88e1-e14dc04548b1")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "1" thru_hole circle
+		(at 4.424994 -1)
+		(size 1.524003 1.524003)
+		(drill 0.913995)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "114a6ce7-43ee-400e-a8a1-23539e0f7b83")
+	)
+	(pad "2" thru_hole circle
+		(at 4.424994 1)
+		(size 1.524003 1.524003)
+		(drill 0.913995)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "dc25dcdb-92a5-4d5a-a116-f87a1d8adc96")
+	)
+	(pad "3" thru_hole circle
+		(at 0.575108 0)
+		(size 2.7 2.7)
+		(drill 1.900025)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "2e76e5dd-9e6d-4f93-bbef-2fe5d43bfdd2")
+	)
+	(pad "4" thru_hole circle
+		(at -4.424892 0)
+		(size 2.7 2.7)
+		(drill 1.900025)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "2b3c52df-3acc-434b-81fb-afe594b9a436")
+	)
+	(model "${KIPRJMOD}/../../ExternalLib/ExternalLib.pretty/packages3d/CONN-TH_XT30PB-M.step"
+		(offset
+			(xyz -0.2 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 -180)
+		)
+	)
+)
