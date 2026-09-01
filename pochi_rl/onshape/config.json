@@ -1,0 +1,7 @@
+{
+  "url": "https://cad.onshape.com/documents/a5bc86b4cabd28054695a987/w/875fa3e89bfa74d8d2ecf773/e/ff1147e5683c6675e7492d2b",
+  "output_format": "mujoco",
+  "output_filename": "pochi_cad",
+  "robot_name": "pochi",
+  "post_import_commands": ["python onshape/reorient.py", "python onshape/add_frames.py"]
+}

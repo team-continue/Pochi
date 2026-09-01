@@ -1,0 +1,8 @@
+<mujoco model="pochi_flat_scene">
+  <include file="pochi.xml"/>
+
+  <worldbody>
+    <light name="key_light" pos="0 -3 4" dir="0 1 -1" diffuse="0.8 0.8 0.8"/>
+    <geom name="ground" type="plane" size="10 10 0.1" friction="0.8 0.02 0.001" condim="3"/>
+  </worldbody>
+</mujoco>

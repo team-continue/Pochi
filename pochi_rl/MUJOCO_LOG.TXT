@@ -1,0 +1,335 @@
+WARNING Sun Aug 30 01:03:40 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 01:39:23 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 01:45:12 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 01:47:52 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 01:48:27 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 01:59:21 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 02:00:31 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 02:01:10 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 10:31:22 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 10:47:33 2026: Attach conflict when attaching 'pochi', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:02:23 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:02:25 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:02:42 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:03:48 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:04:02 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:04:36 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:04:50 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:05:26 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:06:12 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:06:16 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:06:34 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:06:38 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:06:57 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:19:06 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:19:23 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:19:57 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:20:01 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:26:33 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:49:13 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:49:17 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 11:49:45 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 12:02:18 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:30:19 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:30:24 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:30:58 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:31:02 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:31:57 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:32:01 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:32:43 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 13:44:59 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 14:04:40 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 14:51:50 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 14:52:14 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 14:52:41 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 14:58:41 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 14:58:46 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 14:59:12 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:10:46 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:17:22 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:17:27 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:17:51 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:26:21 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:26:26 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:26:40 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:29:10 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:30:38 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:31:05 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:33:20 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:40:44 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:40:49 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:41:09 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Sun Aug 30 15:46:01 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Mon Aug 31 16:36:08 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Mon Aug 31 16:37:55 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Mon Aug 31 16:38:00 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Mon Aug 31 16:38:36 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Mon Aug 31 16:59:02 2026: Attach conflict when attaching 'pochi' to 'mjlab scene', policy is 'warning'
+timestep: parent has 0.002 (default), child has 0.005, keeping parent value
+iterations: parent has 100 (default), child has 50, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
