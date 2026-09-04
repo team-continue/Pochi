@@ -27,6 +27,9 @@ uv run mypy src                       # type check
 
 uv run python scripts/view_mjcf.py    # open robot in MuJoCo viewer
 
+# Scripted (non-learned) stand-up, in a browser over viser
+uv run python scripts/play_standup.py [--port 8090] [--rise-duration 8]
+
 uv sync --group cad                   # extra deps for the CAD tooling
 uv run python scripts/glb_to_mjcf.py --report   # regenerate MJCF + meshes from the CAD export
                                                # (--source glb falls back to the GLB)
@@ -37,9 +40,17 @@ MUJOCO_GL=egl uv run train Pochi-Velocity-Flat-v0 \
   --env.scene.num-envs 4096 --agent.max-iterations 1500 \
   --agent.experiment-name pochi_velocity_flat
 
-# Playback a checkpoint
+# Train the stand-up policy (speed-limited motors; converges in ~10 min on one GPU)
+MUJOCO_GL=egl uv run train Pochi-StandUp-Flat-v0 \
+  --env.scene.num-envs 4096 --agent.max-iterations 600 \
+  --agent.experiment-name pochi_standup_flat
+
+# Playback a checkpoint (--viewer viser serves it in a browser instead)
 uv run play Pochi-Velocity-Flat-v0 \
   --checkpoint-file logs/rsl_rl/pochi_velocity_flat/<ts>/model_1500.pt --num-envs 1
+
+# What a trained stand-up policy actually does, next to the scripted reference
+uv run python scripts/eval_standup_policy.py --checkpoint <ckpt.pt>
 
 # Export to TorchScript/ONNX
 uv run python scripts/export_policy.py --checkpoint <ckpt.pt> --output exports/
@@ -55,17 +66,20 @@ Python uses **2-space indentation** throughout (`indent-width = 2` in `[tool.ruf
 
 The project is deliberately split into a backend-neutral layer and backend-specific layers so an Isaac Lab backend (Phase 2) can be added later without touching Phase 1:
 
-- **`src/pochi_rl/task_spec.py`** — backend-neutral single source of truth for the velocity task: command ranges, reward weights, observation noise, domain-randomization event ranges, and control timing (`sim_dt=0.005`, `decimation=4` → 50 Hz policy). `POCHI_TASK_SPEC` is consumed by the env config; tune task parameters here, not in the env config.
+- **`src/pochi_rl/task_spec.py`** — backend-neutral single source of truth for both tasks. `POCHI_TASK_SPEC` covers the velocity task: command ranges, reward weights, observation noise, domain-randomization event ranges, and control timing (`sim_dt=0.005`, `decimation=4` → 50 Hz policy). `POCHI_STANDUP_SPEC` covers the stand-up task, including `StandUpSafetySpec` — the reduced motor envelope (2 rad/s no-load speed, RS02 continuous torque rating) that makes the stand-up policy safe to run next to on hardware. Tune task parameters here, not in the env configs.
+- **`src/pochi_rl/control/`** — analytic, non-learned controllers, pure numpy and backend-neutral. `leg_kinematics.py` is the planar two-link FK/IK for one leg (all four are geometrically identical). `standup.py` is a scripted stand-up: cutting the motors from the folded crouch drops the robot onto its belly with the hip rolls splayed to their stops, and the controller reverses that on the feet alone — a Cartesian ramp of base height solved back into joint targets, closed on joint encoders only so it also runs on hardware. `mujoco_driver.py` runs it against `scene_flat.xml` with the MJCF's own `<position>` actuators; `scripts/play_standup.py` serves that over viser.
 - **`src/pochi_rl/robot/pochi_constants.py`** — single source of truth for joint/body/geom naming and action order (4 legs × 3 DoF: `hip_roll`, `hip_pitch`, `knee`) plus the CAD-derived link lengths and the default stance. Names must stay in sync with the MJCF.
 - **`src/pochi_rl/mjlab/`** — mjlab backend:
   - `entity_cfg.py` wraps `assets/pochi/pochi.xml` into an mjlab `EntityCfg`.
   - `velocity_flat_env_cfg.py` builds the `ManagerBasedRlEnvCfg` (observations, rewards, events, terminations, contact sensors) from `POCHI_TASK_SPEC`; `play=True` produces the single-env playback variant.
   - `agents/rsl_rl_ppo_cfg.py` is the PPO runner config.
-  - `tasks.py` registers `Pochi-Velocity-Flat-v0` in mjlab's task registry. Registration is triggered by importing `pochi_rl` (also wired via the `mjlab.tasks` entry point in `pyproject.toml`), which is why the editable install is required.
+  - `standup_env_cfg.py` builds the stand-up env: the robot is laid on the floor in `COLLAPSED_JOINT_POS` (a constant, because resetting thousands of robots cannot afford to settle each one; `test_standup_task` re-simulates the collapse and pins it) and has to get up. Its entity is `POCHI_SLOW_ROBOT_CFG`, the same robot with the speed-limited actuator. Observations are the velocity task's minus the three command numbers.
+  - `events.py` has the one custom event term, `reset_collapsed`.
+  - `tasks.py` registers `Pochi-Velocity-Flat-v0` and `Pochi-StandUp-Flat-v0` in mjlab's task registry. Registration is triggered by importing `pochi_rl` (also wired via the `mjlab.tasks` entry point in `pyproject.toml`), which is why the editable install is required.
   - `runner.py` (`PochiOnPolicyRunner`) contains multi-GPU workarounds for the torchrunx/NCCL stack: skips rsl-rl's initial parameter broadcast (seeds are normalized per rank instead), reduces gradients over a gloo group, and guards atexit against torch-elastic signal exceptions. Be careful when upgrading rsl-rl/mjlab — these override internals by monkey-patching.
 - **`src/pochi_rl/isaaclab/`** — Phase 2 stub only (see its `STUB.md`).
 - **`src/pochi_rl/cad/`** — CAD import. `urdf.py` reads the onshape-to-robot export (`pkg_4leg_assem2/`) and is the primary input: it cuts the flat export's ~1600 spurious mate-joints down to the twelve `dof_<LEG>_<KIND>` mates and takes Onshape's own part masses. `glb.py` is a minimal glTF-binary reader used by the `--source glb` fallback, which infers the joint axes from the twelve RS02 placements instead. `convert.py` normalises every link into a canonical zero pose, computes mass properties, and emits the MJCF plus decimated visual meshes. Driven by `scripts/glb_to_mjcf.py`.
 - **`assets/pochi/`** — **generated**: `pochi.xml` and `meshes/*.obj` come from `scripts/glb_to_mjcf.py`; edit the converter and regenerate, never the XML. `scene_flat.xml` (hand-written) adds the ground plane. Conventions, CAD-derived dimensions, and the list of remaining assumptions (RS02 mass, joint limits, actuator gains) are in `assets/pochi/README.md`. Visual geoms are CAD meshes; collision geoms are primitives only.
-- **`tests/`** — fast checks: MJCF loads with expected joint/body counts and mass, task-spec invariants, a 4-env CPU rollout NaN check, and a CAD round-trip (driving the generated model to the CAD joint angles must rebuild the original part placements). Tests skip gracefully if `mujoco`/`mjlab`/the CAD export are missing.
+- **`tests/`** — fast checks: MJCF loads with expected joint/body counts and mass, task-spec invariants, a 4-env CPU rollout NaN check, and a CAD round-trip (driving the generated model to the CAD joint angles must rebuild the original part placements). `test_standup.py` runs the scripted manoeuvre end to end and pins the properties that matter — it gets up, it does it monotonically and slowly, and only the feet ever carry load once it starts rising. `test_standup_task.py` covers the learned task's safety envelope and start pose. Tests skip gracefully if `mujoco`/`mjlab`/the CAD export are missing.
 
 Training outputs go to `logs/rsl_rl/<experiment>/<timestamp>/` (checkpoints, tensorboard, params dump) and are gitignored.

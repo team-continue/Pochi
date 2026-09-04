@@ -15,6 +15,7 @@ from pochi_rl.robot import (
   RS02_PEAK_TORQUE_NM,
   RS02_REFLECTED_INERTIA,
 )
+from pochi_rl.task_spec import POCHI_STANDUP_SPEC
 
 ASSETS_DIR = Path(__file__).resolve().parents[3] / "assets" / "pochi"
 POCHI_XML = ASSETS_DIR / "pochi.xml"
@@ -64,6 +65,44 @@ POCHI_ROBOT_CFG = EntityCfg(
   spec_fn=pochi_spec,
   articulation=EntityArticulationInfoCfg(
     actuators=(POCHI_ACTUATOR,),
+    soft_joint_pos_limit_factor=0.9,
+  ),
+)
+
+
+# --- Speed-limited variant ----------------------------------------------------
+# Same robot and same gains, but the DC-motor curve is told the no-load speed is
+# 2 rad/s rather than the RS02's real 42.9, and the torque ceiling is the
+# continuous rating rather than the stall torque.  The motor therefore cannot
+# drive a joint past 2 rad/s, and has much less authority to fling one; see
+# StandUpSafetySpec for what that does and does not guarantee, and for the
+# measured worst case.
+_SAFETY = POCHI_STANDUP_SPEC.safety
+
+POCHI_SLOW_ACTUATOR = DcMotorActuatorCfg(
+  target_names_expr=(".*_hip_roll", ".*_hip_pitch", ".*_knee"),
+  stiffness=60.0,
+  damping=1.5,
+  effort_limit=_SAFETY.motor_effort_limit,
+  saturation_effort=RS02_PEAK_TORQUE_NM,
+  velocity_limit=_SAFETY.motor_speed_limit,
+  armature=RS02_REFLECTED_INERTIA,
+)
+
+POCHI_SLOW_ROBOT_CFG = EntityCfg(
+  # The stand-up task resets the robot onto the floor itself; this initial
+  # state is only what the entity is built around, and keeping it at the
+  # standing stance keeps ``default_joint_pos`` -- which the action offset, the
+  # joint_pos_rel observation and the posture reward all read -- meaning the
+  # same thing as it does in the velocity task.
+  init_state=EntityCfg.InitialStateCfg(
+    pos=(0.0, 0.0, NOMINAL_BASE_HEIGHT + 0.01),
+    joint_pos=DEFAULT_JOINT_POS,
+    joint_vel={".*": 0.0},
+  ),
+  spec_fn=pochi_spec,
+  articulation=EntityArticulationInfoCfg(
+    actuators=(POCHI_SLOW_ACTUATOR,),
     soft_joint_pos_limit_factor=0.9,
   ),
 )
