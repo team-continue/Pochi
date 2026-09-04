@@ -3,15 +3,26 @@
 Teensy 4.1のPlatformIO環境とCAN3上のRoboStride 03を確認するためのプロジェクトです。
 
 - CAN3: Classic CAN、1 Mbps
-- RoboStride 03: CAN ID 1〜12
+- RoboStride 03: CAN ID 0〜11
 - マスターID: `0xFD`
 - 制御方式: MIT control
 - 起動時の既定状態: 全モーター停止
 - USB Serial: 115200 bps
 - USB packet: COBS + `0x00` delimiter + CRC-32
-- LED: 初期化中は消灯、初期化完了後は点灯、有効なUSB指令受信中は点滅
+- LED: 12台のencoderが見えている間は点灯、不足時は点滅
 
-起動時に12台を順番に初期化します。未接続のモーターがあっても永久待機せず、初期化結果をUSB Serialへ表示してメインループへ進みます。
+起動時は12台すべてにStopを送り、MIT modeを設定したうえでencoderの読み取りを開始します。トルクはWebから明示的にONにするまで入りません。
+
+## Joint reference pose
+
+`src/can3.h` の `CAN3_INITIAL_POSITION_RAD` が、CAN ID `0..11` に対応する
+負荷側absolute encoderの初期姿勢です。外部へ送る角度と外部から受けるMIT目標角度は、
+`normalizeAngle(raw - initial)` により初期姿勢を `0 rad` とする `[-pi, pi]` の値です。
+生encoder座標との相互変換は `src/robostride.h` 内で行います。
+
+MIT位置目標は `src/can3.h` の `CAN3_MIN_POSITION_RAD` と
+`CAN3_MAX_POSITION_RAD` でID別に制限されます。モーター取り付け方向による符号反転は
+Webの3D描画だけに適用され、Mechanical positionとMIT目標値はTeensy座標のままです。
 
 ## Build
 
@@ -27,6 +38,31 @@ Teensy 4.1をUSBで接続して実行します。自動書き込みが始まら�
 ```bash
 ~/.platformio/penv/bin/pio run -t upload
 ```
+
+## Change a RoboStride CAN ID
+
+`test/change_id.cpp` is a one-shot ID changer for one RS03 using the private
+29-bit CAN protocol. Edit `kOldMotorId` and `kNewMotorId`, temporarily use the
+file as `src/main.cpp`, then build and upload it. Connect exactly one target
+motor while changing an ID.
+
+The program first scans every valid private-protocol device ID from `0x01`
+through `0xFE` on CAN3 and prints
+each responding ID. It then verifies the old ID, refuses to proceed if the new
+ID already responds, disables the motor, changes the ID, and verifies both that
+the new ID responds and the old ID no longer responds. A pass leaves the Teensy
+LED on; a failure blinks it. After changing the ID, the program sends the Type
+22 motor-data-save frame (`01 02 03 04 05 06 07 08`) to persist the setting.
+Power-cycle the motor and scan again to verify persistence.
+
+After changing all IDs, restore the normal `src/main.cpp` before uploading the
+control firmware.
+
+The normal firmware implements MIT-style operation control using RoboStride's
+private extended-frame protocol (`run_mode = 0`). Do not switch the motor to the
+separate standard-frame MIT communication protocol. If that protocol was
+selected previously, switch the motor back to the private protocol and power
+cycle it first.
 
 ## USB / UDP
 

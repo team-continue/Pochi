@@ -25,9 +25,9 @@ from .protocol import (
 class PochiClient:
     """Threaded UDP client for one Pochi Teensy bridge.
 
-    The transmitter always sends one atomic 12-motor snapshot. Merely starting
-    the client is safe: every motor stays disabled until ``set_mit`` is called
-    with ``enable=True``.
+    The transmitter always sends one atomic 12-motor snapshot. Starting the
+    client is safe: IDs 0..11 remain disabled until ``set_mit`` is explicitly
+    called with ``enable=True``.
     """
 
     def __init__(
@@ -36,7 +36,7 @@ class PochiClient:
         state_bind: tuple[str, int] = ("0.0.0.0", 15001),
         *,
         command_hz: float = 200.0,
-        state_timeout: float = 0.1,
+        state_timeout: float = 0.25,
     ) -> None:
         if command_hz <= 0.0:
             raise ValueError("command_hz must be positive")
@@ -66,15 +66,22 @@ class PochiClient:
     def start(self) -> PochiClient:
         if self._running.is_set():
             return self
-        command_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._command_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         state_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         state_socket.bind(self.state_bind)
         state_socket.settimeout(0.05)
-        self._command_socket = command_socket
         self._state_socket = state_socket
         self._running.set()
-        self._tx_thread = threading.Thread(target=self._transmit_loop, name="pochi-command", daemon=True)
-        self._rx_thread = threading.Thread(target=self._receive_loop, name="pochi-state", daemon=True)
+        self._tx_thread = threading.Thread(
+            target=self._transmit_loop,
+            name="pochi-command",
+            daemon=True,
+        )
+        self._rx_thread = threading.Thread(
+            target=self._receive_loop,
+            name="pochi-state",
+            daemon=True,
+        )
         self._tx_thread.start()
         self._rx_thread.start()
         return self
@@ -99,6 +106,8 @@ class PochiClient:
             self._state_socket.close()
         self._command_socket = None
         self._state_socket = None
+        self._tx_thread = None
+        self._rx_thread = None
 
     def __enter__(self) -> PochiClient:
         return self.start()
@@ -157,7 +166,7 @@ class PochiClient:
             torque_nm=torque_nm,
         )
         with self._command_lock:
-            self._commands[motor_id - 1] = command
+            self._commands[motor_id] = command
 
     def set_all_mit(self, commands: Iterable[MotorCommand]) -> None:
         commands = list(commands)
@@ -169,7 +178,7 @@ class PochiClient:
     def disable(self, motor: int | str) -> None:
         motor_id = self._resolve_motor_id(motor)
         with self._command_lock:
-            self._commands[motor_id - 1] = MotorCommand(motor_id=motor_id)
+            self._commands[motor_id] = MotorCommand(motor_id=motor_id)
 
     def disable_all(self) -> None:
         with self._command_lock:
@@ -190,8 +199,8 @@ class PochiClient:
                 return JOINT_BY_NAME[motor].motor_id
             except KeyError as exc:
                 raise ValueError(f"unknown joint {motor!r}") from exc
-        if not 1 <= motor <= 12:
-            raise ValueError("motor ID must be in the range 1..12")
+        if not 0 <= motor < 12:
+            raise ValueError("motor ID must be in the range 0..11")
         return motor
 
     def _send_once(self) -> None:

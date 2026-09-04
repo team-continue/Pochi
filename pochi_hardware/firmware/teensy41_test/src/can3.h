@@ -9,9 +9,36 @@
 
 #include "robostride.h"
 
-constexpr uint8_t CAN3_FIRST_MOTOR_ID = 1;
+constexpr uint8_t CAN3_FIRST_MOTOR_ID = 0;
 constexpr size_t CAN3_MOTOR_COUNT = 12;
 constexpr uint32_t CAN3_COMMAND_TIMEOUT_MS = 50;
+
+// Load-side absolute encoder positions at the robot's reference pose, indexed
+// directly by CAN ID 0..11. Edit this one array when recalibrating the pose.
+// Joint order is foot-to-body for each leg:
+// FL 0,1,2 / RL 3,4,5 / RR 6,7,8 / FR 9,10,11.
+constexpr float CAN3_INITIAL_POSITION_RAD[CAN3_MOTOR_COUNT] = {
+    2.9789050f, 5.4445298f, 1.0083539f,
+    3.2805416f, 0.9617540f, 0.1628750f,
+    4.7653043f, 0.0347014f, 6.1671015f,
+    2.9602377f, 2.2337207f, 3.1243120f,
+};
+
+// Final MIT target filter in the Teensy's joint coordinate system, indexed by
+// CAN ID. These limits are enforced even if a host sends a wider target.
+constexpr float CAN3_PI = 3.14159265358979323846f;
+constexpr float CAN3_MIN_POSITION_RAD[CAN3_MOTOR_COUNT] = {
+    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -CAN3_PI / 6.0f,
+    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -CAN3_PI / 6.0f,
+    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -CAN3_PI / 6.0f,
+    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -CAN3_PI / 6.0f,
+};
+constexpr float CAN3_MAX_POSITION_RAD[CAN3_MOTOR_COUNT] = {
+    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
+    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
+    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
+    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
+};
 
 enum : uint8_t {
   CAN3_CONTROL_DISABLED = 0,
@@ -70,10 +97,10 @@ namespace can3_detail {
 
 constexpr uint32_t kCanBaudRate = 1000000;
 constexpr uint8_t kMasterId = 0xFD;
-constexpr uint32_t kMotorSlotIntervalUs = 400;
+constexpr uint32_t kMotorSlotIntervalUs = 1000;
 constexpr uint32_t kConnectionTimeoutUs = 250000;
-constexpr uint32_t kDisabledRefreshUs = 100000;
-constexpr float kPositionLimitRad = 4.0f * static_cast<float>(M_PI);
+constexpr uint32_t kDisabledRefreshUs = 500000;
+constexpr uint16_t kMechanicalPositionIndex = 0x7019;
 constexpr float kVelocityLimitRadS = 50.0f;
 constexpr float kTorqueLimitNm = 60.0f;
 constexpr float kKpLimit = 5000.0f;
@@ -84,24 +111,26 @@ using Motor = RoboStride<CAN3, RX_SIZE_256, TX_SIZE_16>;
 
 inline CanBus bus;
 inline Motor motors[CAN3_MOTOR_COUNT] = {
-    Motor(&bus, kMasterId, 0x01, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x02, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x03, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x04, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x05, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x06, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x07, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x08, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x09, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x0A, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x0B, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
-    Motor(&bus, kMasterId, 0x0C, static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f),
+    Motor(&bus, kMasterId, 0x00, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[0]),
+    Motor(&bus, kMasterId, 0x01, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[1]),
+    Motor(&bus, kMasterId, 0x02, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[2]),
+    Motor(&bus, kMasterId, 0x03, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[3]),
+    Motor(&bus, kMasterId, 0x04, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[4]),
+    Motor(&bus, kMasterId, 0x05, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[5]),
+    Motor(&bus, kMasterId, 0x06, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[6]),
+    Motor(&bus, kMasterId, 0x07, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[7]),
+    Motor(&bus, kMasterId, 0x08, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[8]),
+    Motor(&bus, kMasterId, 0x09, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[9]),
+    Motor(&bus, kMasterId, 0x0A, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[10]),
+    Motor(&bus, kMasterId, 0x0B, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[11]),
 };
 
 inline Can3MitCommand commands[CAN3_MOTOR_COUNT] = {};
 inline bool initialized[CAN3_MOTOR_COUNT] = {};
-inline bool feedback_valid[CAN3_MOTOR_COUNT] = {};
+inline bool encoder_valid[CAN3_MOTOR_COUNT] = {};
+inline bool motion_feedback_valid[CAN3_MOTOR_COUNT] = {};
 inline bool effective_enabled[CAN3_MOTOR_COUNT] = {};
+inline float encoder_position_rad[CAN3_MOTOR_COUNT] = {};
 inline uint32_t last_rx_us[CAN3_MOTOR_COUNT] = {};
 inline uint32_t last_stop_us[CAN3_MOTOR_COUNT] = {};
 inline uint32_t last_slot_us = 0;
@@ -117,12 +146,37 @@ inline bool command_alive() {
 }
 
 inline void receive_callback(const CAN_message_t &message) {
+  if (!message.flags.extended || message.len != 8) {
+    return;
+  }
+
+  const uint8_t communication_type =
+      static_cast<uint8_t>((message.id >> 24) & 0x1F);
+  const uint16_t parameter_index =
+      static_cast<uint16_t>(message.buf[0]) |
+      (static_cast<uint16_t>(message.buf[1]) << 8);
+
   for (size_t i = 0; i < CAN3_MOTOR_COUNT; ++i) {
-    if (motors[i].setCanFrame(message)) {
-      feedback_valid[i] = true;
-      last_rx_us[i] = micros();
-      return;
+    auto &motor = motors[i];
+    if (!motor.setCanFrame(message)) {
+      continue;
     }
+
+    float position_rad = NAN;
+    if (communication_type == Communication_Type_MotorRequest) {
+      position_rad = motor.feedback.position_rad;
+      motion_feedback_valid[i] = true;
+    } else if (communication_type == Communication_Type_GetSingleParameter &&
+               parameter_index == kMechanicalPositionIndex) {
+      position_rad = motor.rawToJointPosition(motor.drw.mechPos.data);
+    }
+
+    if (std::isfinite(position_rad)) {
+      encoder_position_rad[i] = position_rad;
+      encoder_valid[i] = true;
+      last_rx_us[i] = micros();
+    }
+    return;
   }
 }
 
@@ -160,17 +214,21 @@ inline void can3_init() {
   bus.setBaudRate(kCanBaudRate);
   bus.setMaxMB(16);
   bus.enableFIFO();
-
-  for (size_t i = 0; i < CAN3_MOTOR_COUNT; ++i) {
-    commands[i].motor_id = static_cast<uint8_t>(CAN3_FIRST_MOTOR_ID + i);
-    delay(50);
-    initialized[i] = motors[i].init(
-        kVelocityLimitRadS, 100.0f, move_control_mode, false, false);
-    motors[i].stopMotorNonBlocking(false);
-  }
-
   bus.onReceive(receive_callback);
   bus.enableFIFOInterrupt();
+  delay(100);
+
+  // Boot is always torque-off. Configure MIT mode while disabled and never
+  // send MotorEnable until an explicit, fresh command requests it.
+  for (size_t i = 0; i < CAN3_MOTOR_COUNT; ++i) {
+    commands[i].motor_id = static_cast<uint8_t>(CAN3_FIRST_MOTOR_ID + i);
+    const bool stopped = motors[i].stopMotorNonBlocking(false);
+    delay(2);
+    const bool configured = motors[i].setRunModeNonBlocking(move_control_mode);
+    initialized[i] = stopped && configured;
+    last_stop_us[i] = micros();
+    delay(2);
+  }
 }
 
 inline bool can3_apply_commands(const Can3MitCommand *new_commands,
@@ -187,7 +245,9 @@ inline bool can3_apply_commands(const Can3MitCommand *new_commands,
     const size_t index = source.motor_id - CAN3_FIRST_MOTOR_ID;
     commands[index] = source;
     commands[index].position_rad = constrain(
-        source.position_rad, -kPositionLimitRad, kPositionLimitRad);
+        source.position_rad,
+        CAN3_MIN_POSITION_RAD[index],
+        CAN3_MAX_POSITION_RAD[index]);
     commands[index].velocity_rad_s = constrain(
         source.velocity_rad_s, -kVelocityLimitRadS, kVelocityLimitRadS);
     commands[index].kp = constrain(source.kp, 0.0f, kKpLimit);
@@ -223,10 +283,14 @@ inline void can3_loop() {
   const size_t index = next_motor_index;
   next_motor_index = (next_motor_index + 1U) % CAN3_MOTOR_COUNT;
   const auto &command = commands[index];
-  const bool connected = feedback_valid[index] &&
+  const bool connected = encoder_valid[index] &&
                          static_cast<uint32_t>(now_us - last_rx_us[index]) <=
                              kConnectionTimeoutUs;
+  const bool position_in_range =
+      encoder_position_rad[index] >= CAN3_MIN_POSITION_RAD[index] &&
+      encoder_position_rad[index] <= CAN3_MAX_POSITION_RAD[index];
   const bool enable = command_alive() && initialized[index] && connected &&
+                      position_in_range &&
                       command.control_mode == CAN3_CONTROL_MIT &&
                       (command.flags & CAN3_COMMAND_ENABLE) != 0U;
 
@@ -256,7 +320,11 @@ inline void can3_loop() {
     motors[index].stopMotorNonBlocking(
         (command.flags & CAN3_COMMAND_CLEAR_FAULT) != 0U);
     last_stop_us[index] = now_us;
+    return;
   }
+
+  // Mechanical position stays observable while torque is off.
+  motors[index].requestParameterNonBlocking(kMechanicalPositionIndex);
 }
 
 inline bool can3_command_alive() {
@@ -267,7 +335,7 @@ inline size_t can3_connected_count() {
   size_t count = 0;
   const uint32_t now_us = micros();
   for (size_t i = 0; i < CAN3_MOTOR_COUNT; ++i) {
-    count += can3_detail::feedback_valid[i] &&
+    count += can3_detail::encoder_valid[i] &&
                      static_cast<uint32_t>(now_us - can3_detail::last_rx_us[i]) <=
                          can3_detail::kConnectionTimeoutUs
                  ? 1U
@@ -283,7 +351,7 @@ inline bool can3_get_telemetry(size_t index, Can3MotorTelemetry &telemetry) {
   }
 
   const uint32_t now_us = micros();
-  const bool connected = feedback_valid[index] &&
+  const bool connected = encoder_valid[index] &&
                          static_cast<uint32_t>(now_us - last_rx_us[index]) <=
                              kConnectionTimeoutUs;
   const auto &motor = motors[index];
@@ -295,15 +363,17 @@ inline bool can3_get_telemetry(size_t index, Can3MotorTelemetry &telemetry) {
   telemetry.flags =
       (initialized[index] ? CAN3_STATE_INITIALIZED : 0U) |
       (connected ? CAN3_STATE_CONNECTED : 0U) |
-      (feedback_valid[index] ? CAN3_STATE_FEEDBACK_VALID : 0U) |
+      (encoder_valid[index] ? CAN3_STATE_FEEDBACK_VALID : 0U) |
       (effective_enabled[index] ? CAN3_STATE_ENABLE_REQUESTED : 0U) |
       (command_alive() ? CAN3_STATE_COMMAND_ALIVE : 0U) |
       (motor.faultCode() != 0U ? CAN3_STATE_FAULT : 0U);
-  telemetry.last_rx_age_us = feedback_valid[index]
+  telemetry.last_rx_age_us = encoder_valid[index]
                                  ? static_cast<uint32_t>(now_us - last_rx_us[index])
                                  : UINT32_MAX;
-  if (feedback_valid[index]) {
-    telemetry.position_rad = motor.feedback.position_rad;
+  if (encoder_valid[index]) {
+    telemetry.position_rad = encoder_position_rad[index];
+  }
+  if (effective_enabled[index] && motion_feedback_valid[index]) {
     telemetry.velocity_rad_s = motor.feedback.velocity_rad_s;
     telemetry.torque_nm = motor.feedback.torque_nm;
     telemetry.temp_mos_c = motor.feedback.temp_mos;

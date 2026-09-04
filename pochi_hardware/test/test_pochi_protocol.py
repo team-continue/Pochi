@@ -55,7 +55,7 @@ def make_state() -> StatePacket:
             command_torque_nm=0.0,
             command_sequence=41,
         )
-        for motor_id in range(1, 13)
+        for motor_id in range(12)
     ]
     imu = ImuState(flags=7, last_rx_age_us=50, quaternion_w=1.0,
                    quaternion_x=0.0, quaternion_y=0.0, quaternion_z=0.0)
@@ -98,8 +98,8 @@ def test_state_round_trip_includes_all_motors_and_imu() -> None:
     packet = encode_state(make_state())
     decoded = decode_state(packet)
     assert len(packet) == STATE_PACKET_BYTES == 860
-    assert [motor.motor_id for motor in decoded.motors] == list(range(1, 13))
-    assert decoded.motors[11].position_rad == pytest.approx(1.2)
+    assert [motor.motor_id for motor in decoded.motors] == list(range(12))
+    assert decoded.motors[11].position_rad == pytest.approx(1.1)
     assert decoded.imu.quaternion_w == pytest.approx(1.0)
 
 

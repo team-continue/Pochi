@@ -49,6 +49,7 @@
 #define Communication_Type_GetSingleParameter    0x11  // 读取单个参数
 #define Communication_Type_SetSingleParameter    0x12  // 设定单个参数
 #define Communication_Type_ErrorFeedback         0x15  // 故障反馈帧
+#define Communication_Type_SaveParameters        0x16  // 保存电机参数到非易失存储
 #define Communication_Type_SetBaudRate           0x17  // 设置电机波特率（重启生效）
 
 static const uint16_t Index_List[] = {
@@ -138,7 +139,7 @@ static const std::map<ActuatorType, ActuatorOperation> ACTUATOR_OPERATION_MAPPIN
     { ActuatorType::ROBSTRIDE_00, { 4 * M_PI, 50, 17,   500.0,  5.0   } },
     { ActuatorType::ROBSTRIDE_01, { 4 * M_PI, 44, 17,   500.0,  5.0   } },
     { ActuatorType::ROBSTRIDE_02, { 4 * M_PI, 44, 17,   500.0,  5.0   } },
-    { ActuatorType::ROBSTRIDE_03, { 4 * M_PI, 50, 60,  5000.0, 100.0  } },
+    { ActuatorType::ROBSTRIDE_03, { 4 * M_PI, 20, 60,  5000.0, 100.0  } },
     { ActuatorType::ROBSTRIDE_04, { 4 * M_PI, 15, 120, 5000.0, 100.0  } },
     { ActuatorType::ROBSTRIDE_05, { 4 * M_PI, 33, 17,   500.0,  5.0   } },
     { ActuatorType::ROBSTRIDE_06, { 4 * M_PI, 20, 60,  5000.0, 100.0  } },
@@ -212,6 +213,23 @@ public:
         ref.kd_pos = 0.0f;
     }
     ~RoboStride(){}
+
+    static float normalizeAngle(float angle_rad) {
+        return atan2f(sinf(angle_rad), cosf(angle_rad));
+    }
+
+    // Keep the rest of the firmware in joint coordinates: zero is the
+    // configured reference pose and the result is always in [-pi, pi].
+    float rawToJointPosition(float raw_position_rad) const {
+        return normalizeAngle(raw_position_rad - pos_offset_);
+    }
+
+    // MIT commands use the motor's raw encoder coordinate. Since the offset is
+    // in [0, 2pi) and the joint target is normalized, this remains inside the
+    // RS03 Type-2 position range [-4pi, 4pi].
+    float jointToRawPosition(float joint_position_rad) const {
+        return pos_offset_ + normalizeAngle(joint_position_rad);
+    }
 
     // ===========
     // Requested APIs
@@ -645,7 +663,7 @@ private:
 
             accumulated_position_rad_ = (static_cast<float>(position_turns_) * full_range) + current_raw_pos;
             prev_raw_position_rad_ = current_raw_pos;
-            feedback.position_rad = accumulated_position_rad_ - pos_offset_;
+            feedback.position_rad = rawToJointPosition(accumulated_position_rad_);
             feedback.velocity_rad_s = uint_to_float(vel_u16, -(float)op.velocity, (float)op.velocity, 16);
             feedback.torque_nm = uint_to_float(tor_u16, -(float)op.torque, (float)op.torque, 16);
             feedback.temp_mos = (float)temp_u16 * 0.1f;
@@ -950,6 +968,19 @@ private:
     // (Optional) other modes kept as-is (if you still use them elsewhere)
     // ==============
 public:
+    bool setRunModeNonBlocking(uint8_t run_mode) {
+        configured_run_mode_ = run_mode;
+        return Set_RobStrite_Motor_parameter(
+            drw.run_mode.index,
+            static_cast<float>(run_mode),
+            Set_mode,
+            false);
+    }
+
+    bool requestParameterNonBlocking(uint16_t index) {
+        return Get_RobStrite_Motor_parameter(index, false);
+    }
+
     bool sendMitCommand(float position_rad,
                         float velocity_rad_s,
                         float kp,
@@ -962,7 +993,13 @@ public:
         ref.kd_pos = kd;
         ref.torque_nm = torque_nm;
         last_recv_ros2_ts_ms_ = millis();
-        return send_motion_command(torque_nm, position_rad, velocity_rad_s, kp, kd, false);
+        return send_motion_command(
+            torque_nm,
+            jointToRawPosition(position_rad),
+            velocity_rad_s,
+            kp,
+            kd,
+            false);
     }
 
     bool enableMotorNonBlocking() {
@@ -1042,16 +1079,138 @@ public:
         Set_RobStrite_Motor_parameter(0X7005, Set_Zero_mode, Set_mode);
     }
 
-    void Set_CAN_ID(uint8_t Set_CAN_ID){
-        Disenable_Motor(0);
-
-        CAN_message_t w_msg;
-        w_msg.id = (Communication_Type_Can_ID << 24) | (Set_CAN_ID << 16) | (master_id_ << 8) | motor_id_;
+    bool Probe(unsigned long timeout_ms = 50){
+        CAN_message_t w_msg{};
+        w_msg.id = (Communication_Type_Get_ID << 24) | (master_id_ << 8) | motor_id_;
         w_msg.flags.extended = 1;
         w_msg.len = 8;
-        memset(w_msg.buf, 0, 8);
 
-        can_->write(w_msg);
+        if (can_->write(w_msg) != 1) {
+            return false;
+        }
+
+        const unsigned long start_ms = millis();
+        do {
+            CAN_message_t r_msg{};
+            while (can_->read(r_msg)) {
+                if (!r_msg.flags.extended || r_msg.len != 8) {
+                    continue;
+                }
+                const uint8_t communication_type =
+                    static_cast<uint8_t>((r_msg.id >> 24) & 0x1F);
+                const uint8_t source_id =
+                    static_cast<uint8_t>((r_msg.id >> 8) & 0xFF);
+                const uint8_t destination_id =
+                    static_cast<uint8_t>(r_msg.id & 0xFF);
+                if (communication_type == Communication_Type_Get_ID &&
+                    source_id == motor_id_ &&
+                    (destination_id == 0xFE || destination_id == master_id_)) {
+                    return true;
+                }
+            }
+        } while (millis() - start_ms < timeout_ms);
+
+        return false;
+    }
+
+    bool Set_CAN_ID(uint8_t new_can_id, unsigned long timeout_ms = 100){
+        // RS03 stores CAN_ID in parameter 0x2009, whose documented persistent
+        // range is 0..20.
+        if (new_can_id > 20 || new_can_id == master_id_) {
+            return false;
+        }
+        if (new_can_id == motor_id_) {
+            return Probe(timeout_ms);
+        }
+
+        // ID changes should be performed with torque disabled.  The Type 7
+        // command itself takes effect immediately and replies as Type 0 using
+        // the new motor ID.
+        if (!Disenable_Motor(0, false)) {
+            return false;
+        }
+        delay(20);
+
+        CAN_message_t w_msg{};
+        w_msg.id = (Communication_Type_Can_ID << 24) |
+                   (static_cast<uint32_t>(new_can_id) << 16) |
+                   (static_cast<uint32_t>(master_id_) << 8) |
+                   motor_id_;
+        w_msg.flags.extended = 1;
+        w_msg.len = 8;
+
+        if (can_->write(w_msg) != 1) {
+            return false;
+        }
+
+        const uint8_t old_can_id = motor_id_;
+        const unsigned long start_ms = millis();
+        do {
+            CAN_message_t r_msg{};
+            while (can_->read(r_msg)) {
+                if (!r_msg.flags.extended || r_msg.len != 8) {
+                    continue;
+                }
+                const uint8_t communication_type =
+                    static_cast<uint8_t>((r_msg.id >> 24) & 0x1F);
+                const uint8_t source_id =
+                    static_cast<uint8_t>((r_msg.id >> 8) & 0xFF);
+                const uint8_t destination_id =
+                    static_cast<uint8_t>(r_msg.id & 0xFF);
+                if (communication_type == Communication_Type_Get_ID &&
+                    source_id == new_can_id &&
+                    (destination_id == 0xFE || destination_id == master_id_)) {
+                    motor_id_ = new_can_id;
+                    return true;
+                }
+            }
+        } while (millis() - start_ms < timeout_ms);
+
+        // The change can still have succeeded if the immediate reply was lost.
+        motor_id_ = new_can_id;
+        if (Probe(timeout_ms)) {
+            return true;
+        }
+        motor_id_ = old_can_id;
+        return false;
+    }
+
+    bool Save_Parameters(unsigned long timeout_ms = 100){
+        CAN_message_t w_msg{};
+        w_msg.id = (Communication_Type_SaveParameters << 24) |
+                   (static_cast<uint32_t>(master_id_) << 8) |
+                   motor_id_;
+        w_msg.flags.extended = 1;
+        w_msg.len = 8;
+        for (uint8_t i = 0; i < 8; ++i) {
+            w_msg.buf[i] = static_cast<uint8_t>(i + 1);
+        }
+
+        if (can_->write(w_msg) != 1) {
+            return false;
+        }
+
+        const unsigned long start_ms = millis();
+        do {
+            CAN_message_t r_msg{};
+            while (can_->read(r_msg)) {
+                if (!r_msg.flags.extended || r_msg.len != 8) {
+                    continue;
+                }
+                const uint8_t communication_type =
+                    static_cast<uint8_t>((r_msg.id >> 24) & 0x1F);
+                const uint8_t source_id =
+                    static_cast<uint8_t>((r_msg.id >> 8) & 0xFF);
+                const uint8_t destination_id =
+                    static_cast<uint8_t>(r_msg.id & 0xFF);
+                if (communication_type == Communication_Type_MotorRequest &&
+                    source_id == motor_id_ && destination_id == master_id_) {
+                    return true;
+                }
+            }
+        } while (millis() - start_ms < timeout_ms);
+
+        return false;
     }
 
     bool RobStrite_Motor_PosCSP_control(float Speed, float Angle){

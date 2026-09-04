@@ -12,19 +12,20 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
-from pochi_client import JOINTS, PochiClient
+from pochi_client import COMMAND_ENABLE, CONTROL_MIT, JOINTS, JOINT_BY_ID, MotorCommand, PochiClient
 
 MOTOR_INITIALIZED = 1 << 0
 MOTOR_CONNECTED = 1 << 1
 MOTOR_FEEDBACK_VALID = 1 << 2
 MOTOR_ENABLE_REQUESTED = 1 << 3
 MOTOR_FAULT = 1 << 6
-IMU_CONNECTED = 1 << 0
+IMU_INITIALIZED = 1 << 0
+IMU_SAMPLE_VALID = 1 << 1
 
 JOINT_LIMITS_RAD = {
-    "hip": (math.radians(-55.0), math.radians(55.0)),
-    "thigh": (math.radians(-150.0), math.radians(150.0)),
-    "calf": (math.radians(-165.0), math.radians(25.0)),
+    "hip": (-math.pi / 6.0, math.pi / 2.0),
+    "thigh": (-math.pi / 2.0, math.pi / 2.0),
+    "calf": (-3.0 * math.pi / 4.0, 3.0 * math.pi / 4.0),
 }
 
 
@@ -38,7 +39,7 @@ def _motor_state_text(flags: int, fault_code: int) -> str:
     if flags & MOTOR_ENABLE_REQUESTED:
         return "MIT ENABLED"
     if flags & MOTOR_CONNECTED:
-        return "CONNECTED"
+        return "ENCODER LIVE"
     if flags & MOTOR_FEEDBACK_VALID:
         return "STALE"
     if flags & MOTOR_INITIALIZED:
@@ -56,7 +57,7 @@ def _quaternion_to_rpy_deg(w: float, x: float, y: float, z: float) -> tuple[floa
 
 
 class WebControlService:
-    """Owns the safe browser-control state around one ``PochiClient``."""
+    """Own the browser control state and keep torque off until explicit opt-in."""
 
     def __init__(self, client: PochiClient, *, kp: float = 20.0, kd: float = 0.5) -> None:
         self.client = client
@@ -73,7 +74,6 @@ class WebControlService:
             self.browser_count += 1
 
     def unregister_browser(self) -> None:
-        should_disable = False
         with self._lock:
             self.browser_count = max(0, self.browser_count - 1)
             should_disable = self.browser_count == 0
@@ -83,7 +83,7 @@ class WebControlService:
     def unavailable_motor_ids(self) -> list[int]:
         state = self.client.latest_state()
         if state is None:
-            return list(range(1, 13))
+            return [joint.motor_id for joint in JOINTS]
         by_id = {motor.motor_id: motor for motor in state.motors}
         return [
             joint.motor_id
@@ -92,6 +92,11 @@ class WebControlService:
             or not math.isfinite(motor.position_rad)
             or not (motor.flags & MOTOR_CONNECTED)
             or bool(motor.flags & MOTOR_FAULT)
+            or not (
+                JOINT_LIMITS_RAD[joint.joint][0]
+                <= motor.position_rad
+                <= JOINT_LIMITS_RAD[joint.joint][1]
+            )
         ]
 
     def enable_all(self) -> None:
@@ -99,17 +104,33 @@ class WebControlService:
         if unavailable:
             joined = ", ".join(map(str, unavailable))
             raise ValueError(f"valid feedback is required from all motors; unavailable IDs: {joined}")
+
         state = self.client.latest_state()
         assert state is not None
         by_id = {motor.motor_id: motor for motor in state.motors}
+        commands: list[MotorCommand] = []
+        targets: dict[int, float] = {}
+        for joint in JOINTS:
+            motor = by_id[joint.motor_id]
+            targets[joint.motor_id] = motor.position_rad
+            commands.append(
+                MotorCommand(
+                    motor_id=joint.motor_id,
+                    control_mode=CONTROL_MIT,
+                    flags=COMMAND_ENABLE,
+                    position_rad=motor.position_rad,
+                    velocity_rad_s=0.0,
+                    kp=self.kp,
+                    kd=self.kd,
+                    torque_nm=0.0,
+                )
+            )
+
         with self._lock:
             self.client.clear_emergency_stop()
+            self.client.set_all_mit(commands)
+            self._targets = targets
             self.emergency_stop = False
-            for joint in JOINTS:
-                motor = by_id[joint.motor_id]
-                display_position = (motor.position_rad - joint.zero_offset_rad) * joint.direction
-                self._targets[joint.motor_id] = display_position
-                self._send_joint_locked(joint.motor_id)
             self.torque_enabled = True
 
     def disable_all(self) -> None:
@@ -118,37 +139,31 @@ class WebControlService:
             self.torque_enabled = False
 
     def set_target(self, motor_id: int, display_position_rad: float) -> None:
-        if not isinstance(motor_id, int) or not 1 <= motor_id <= 12:
-            raise ValueError("motorId must be an integer from 1 through 12")
+        if isinstance(motor_id, bool) or motor_id not in JOINT_BY_ID:
+            raise ValueError("motorId must be an integer from 0 through 11")
         if not math.isfinite(display_position_rad):
             raise ValueError("positionRad must be finite")
-        joint = JOINTS[motor_id - 1]
+        joint = JOINT_BY_ID[motor_id]
         low, high = JOINT_LIMITS_RAD[joint.joint]
         clamped = max(low, min(high, display_position_rad))
         with self._lock:
             self._targets[motor_id] = clamped
             if self.torque_enabled:
-                self._send_joint_locked(motor_id)
+                self.client.set_mit(
+                    motor_id,
+                    position_rad=clamped,
+                    velocity_rad_s=0.0,
+                    kp=self.kp,
+                    kd=self.kd,
+                    torque_nm=0.0,
+                    enable=True,
+                )
 
     def emergency_stop_all(self) -> None:
         with self._lock:
             self.client.emergency_stop()
             self.emergency_stop = True
             self.torque_enabled = False
-
-    def _send_joint_locked(self, motor_id: int) -> None:
-        joint = JOINTS[motor_id - 1]
-        display_target = self._targets[motor_id]
-        raw_target = display_target / joint.direction + joint.zero_offset_rad
-        self.client.set_mit(
-            motor_id,
-            position_rad=raw_target,
-            velocity_rad_s=0.0,
-            kp=self.kp,
-            kd=self.kd,
-            torque_nm=0.0,
-            enable=True,
-        )
 
     def handle_message(self, message: dict[str, object]) -> None:
         message_type = message.get("type")
@@ -178,10 +193,12 @@ class WebControlService:
         unavailable = self.unavailable_motor_ids()
         by_id = {motor.motor_id: motor for motor in state.motors} if state else {}
         motors: list[dict[str, object]] = []
+        connected_count = 0
         with self._lock:
             targets = dict(self._targets)
             torque_enabled = self.torque_enabled
             emergency_stop = self.emergency_stop
+
         for joint in JOINTS:
             motor = by_id.get(joint.motor_id)
             if motor is None:
@@ -193,6 +210,7 @@ class WebControlService:
                         "leg": joint.leg,
                         "joint": joint.joint,
                         "positionRad": None,
+                        "positionDeg": None,
                         "velocityRadS": None,
                         "torqueNm": None,
                         "targetRad": targets[joint.motor_id],
@@ -205,7 +223,11 @@ class WebControlService:
                     }
                 )
                 continue
-            position = (motor.position_rad - joint.zero_offset_rad) * joint.direction
+
+            position = motor.position_rad
+            position_value = _finite(position)
+            connected = bool(motor.flags & MOTOR_CONNECTED) and position_value is not None
+            connected_count += int(connected)
             motors.append(
                 {
                     "id": joint.motor_id,
@@ -213,43 +235,75 @@ class WebControlService:
                     "label": joint.label,
                     "leg": joint.leg,
                     "joint": joint.joint,
-                    "positionRad": _finite(position),
-                    "velocityRadS": _finite(motor.velocity_rad_s * joint.direction),
-                    "torqueNm": _finite(motor.torque_nm * joint.direction),
+                    "positionRad": position_value,
+                    "positionDeg": None if position_value is None else math.degrees(position_value),
+                    "velocityRadS": _finite(motor.velocity_rad_s),
+                    "torqueNm": _finite(motor.torque_nm),
                     "targetRad": targets[joint.motor_id],
                     "tempMosC": _finite(motor.temp_mos_c),
                     "busVoltageV": _finite(motor.bus_voltage_v),
-                    "ageMs": None if motor.last_rx_age_us == 0xFFFFFFFF else motor.last_rx_age_us / 1000.0,
+                    "ageMs": None
+                    if motor.last_rx_age_us == 0xFFFFFFFF
+                    else motor.last_rx_age_us / 1000.0,
                     "flags": motor.flags,
                     "faultCode": motor.fault_code,
                     "state": _motor_state_text(motor.flags, motor.fault_code),
                 }
             )
 
-        roll, pitch, yaw = (None, None, None)
-        imu_connected = False
+        imu_payload: dict[str, object] = {
+            "connected": False,
+            "rollDeg": None,
+            "pitchDeg": None,
+            "yawDeg": None,
+            "quaternionW": None,
+            "quaternionX": None,
+            "quaternionY": None,
+            "quaternionZ": None,
+            "ageMs": None,
+            "sampleCounter": 0,
+            "accuracy": 0,
+        }
         if state is not None:
             imu = state.imu
-            imu_connected = bool(imu.flags & IMU_CONNECTED)
-            roll, pitch, yaw = _quaternion_to_rpy_deg(
-                imu.quaternion_w, imu.quaternion_x, imu.quaternion_y, imu.quaternion_z
+            quaternion = (
+                imu.quaternion_w,
+                imu.quaternion_x,
+                imu.quaternion_y,
+                imu.quaternion_z,
             )
+            roll, pitch, yaw = _quaternion_to_rpy_deg(*quaternion)
+            imu_payload = {
+                "connected": bool(imu.flags & IMU_INITIALIZED)
+                and bool(imu.flags & IMU_SAMPLE_VALID)
+                and roll is not None,
+                "rollDeg": roll,
+                "pitchDeg": pitch,
+                "yawDeg": yaw,
+                "quaternionW": _finite(quaternion[0]),
+                "quaternionX": _finite(quaternion[1]),
+                "quaternionY": _finite(quaternion[2]),
+                "quaternionZ": _finite(quaternion[3]),
+                "ageMs": None
+                if imu.last_rx_age_us == 0xFFFFFFFF
+                else imu.last_rx_age_us / 1000.0,
+                "sampleCounter": imu.sample_counter,
+                "accuracy": imu.accuracy,
+            }
+
         state_age = self.client.state_age()
         return {
             "type": "state",
             "connected": self.client.connected,
+            "connectedCount": connected_count,
+            "expectedCount": len(JOINTS),
             "canEnableTorque": not unavailable and self.client.connected,
             "unavailableMotorIds": unavailable,
             "torqueEnabled": torque_enabled,
             "emergencyStop": emergency_stop,
             "stateAgeMs": state_age * 1000.0 if math.isfinite(state_age) else None,
             "motors": motors,
-            "imu": {
-                "connected": imu_connected,
-                "rollDeg": roll,
-                "pitchDeg": pitch,
-                "yawDeg": yaw,
-            },
+            "imu": imu_payload,
             "stats": {
                 "stateHz": stats.state_hz,
                 "rttMs": stats.rtt_ms,
@@ -267,6 +321,7 @@ def create_app(client: PochiClient | None = None) -> FastAPI:
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        hardware_client.disable_all()
         hardware_client.start()
         try:
             yield
@@ -280,10 +335,14 @@ def create_app(client: PochiClient | None = None) -> FastAPI:
     @app.get("/health")
     async def health() -> JSONResponse:
         snapshot = service.snapshot()
+        imu = snapshot["imu"]
+        assert isinstance(imu, dict)
         return JSONResponse(
             {
                 "ok": True,
                 "hardwareConnected": snapshot["connected"],
+                "motorsConnected": snapshot["connectedCount"],
+                "imuConnected": imu["connected"],
                 "torqueEnabled": snapshot["torqueEnabled"],
             }
         )

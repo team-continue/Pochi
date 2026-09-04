@@ -125,7 +125,7 @@ class StatePacket:
 
 
 def disabled_commands() -> list[MotorCommand]:
-    return [MotorCommand(motor_id=motor_id) for motor_id in range(1, MOTOR_COUNT + 1)]
+    return [MotorCommand(motor_id=motor_id) for motor_id in range(MOTOR_COUNT)]
 
 
 def _pack_header(message_type: int, flags: int, sequence: int, payload_bytes: int) -> bytes:
@@ -172,8 +172,8 @@ def encode_command(
     emergency_stop: bool = False,
 ) -> bytes:
     commands = list(commands)
-    if len(commands) != MOTOR_COUNT or {command.motor_id for command in commands} != set(range(1, 13)):
-        raise ProtocolError("a command must contain motor IDs 1 through 12 exactly once")
+    if len(commands) != MOTOR_COUNT or {command.motor_id for command in commands} != set(range(MOTOR_COUNT)):
+        raise ProtocolError("a command must contain motor IDs 0 through 11 exactly once")
     payload = bytearray()
     for command in commands:
         values = (
@@ -202,7 +202,7 @@ def decode_command(packet: bytes) -> CommandPacket:
     for _ in range(MOTOR_COUNT):
         motors.append(MotorCommand(*COMMAND_RECORD.unpack_from(packet, offset)))
         offset += COMMAND_RECORD.size
-    if {motor.motor_id for motor in motors} != set(range(1, 13)):
+    if {motor.motor_id for motor in motors} != set(range(MOTOR_COUNT)):
         raise ProtocolError("command motor IDs are incomplete or duplicated")
     return CommandPacket(header, motors)
 

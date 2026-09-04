@@ -11,6 +11,8 @@ from pochi_client import (
     CONTROL_MIT,
     Header,
     ImuState,
+    JOINTS,
+    JOINT_BY_NAME,
     MotorState,
     PochiClient,
     StatePacket,
@@ -52,7 +54,7 @@ def fake_state(sequence: int, command_sequence: int) -> StatePacket:
             command_torque_nm=0.0,
             command_sequence=command_sequence,
         )
-        for motor_id in range(1, 13)
+        for motor_id in range(12)
     ]
     return StatePacket(
         Header(2, 1, sequence, int(time.monotonic() * 1e6),
@@ -61,6 +63,25 @@ def fake_state(sequence: int, command_sequence: int) -> StatePacket:
         ImuState(flags=7, quaternion_w=1.0, quaternion_x=0.0,
                  quaternion_y=0.0, quaternion_z=0.0),
     )
+
+
+def test_joint_ids_follow_foot_to_body_wiring_order() -> None:
+    expected = {
+        "front_left_calf": 0,
+        "front_left_thigh": 1,
+        "front_left_hip": 2,
+        "rear_left_calf": 3,
+        "rear_left_thigh": 4,
+        "rear_left_hip": 5,
+        "rear_right_calf": 6,
+        "rear_right_thigh": 7,
+        "rear_right_hip": 8,
+        "front_right_calf": 9,
+        "front_right_thigh": 10,
+        "front_right_hip": 11,
+    }
+    assert {name: JOINT_BY_NAME[name].motor_id for name in expected} == expected
+    assert [joint.motor_id for joint in JOINTS] == list(range(12))
 
 
 def test_client_sends_atomic_commands_and_receives_state() -> None:
@@ -106,13 +127,13 @@ def test_client_sends_atomic_commands_and_receives_state() -> None:
                        kp=20.0, kd=0.5, torque_nm=0.0)
         deadline = time.monotonic() + 1.0
         while time.monotonic() < deadline:
-            if any(command.motors[0].flags & COMMAND_ENABLE for command in seen_commands):
+            if any(command.motors[2].flags & COMMAND_ENABLE for command in seen_commands):
                 break
             time.sleep(0.005)
-        enabled = next(command for command in seen_commands if command.motors[0].flags & COMMAND_ENABLE)
+        enabled = next(command for command in seen_commands if command.motors[2].flags & COMMAND_ENABLE)
         assert len(enabled.motors) == 12
-        assert enabled.motors[0].control_mode == CONTROL_MIT
-        assert enabled.motors[0].position_rad == pytest.approx(0.3)
+        assert enabled.motors[2].control_mode == CONTROL_MIT
+        assert enabled.motors[2].position_rad == pytest.approx(0.3)
         assert client.connected
         assert client.stats().received_packets > 0
     finally:

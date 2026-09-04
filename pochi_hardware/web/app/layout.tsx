@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Pochi Control',
-  description: 'Pochi 12-joint live hardware viewer and MIT controller',
+  title: 'Pochi Telemetry',
+  description: 'Read-only Pochi encoder and IMU posture viewer',
 };
 
 export default function RootLayout({

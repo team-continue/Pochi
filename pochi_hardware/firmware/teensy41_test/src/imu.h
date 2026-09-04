@@ -63,10 +63,10 @@ inline bool imu_init() {
   telemetry = {};
   telemetry.flags = IMU_STATE_QUAT6;
 
-  SPI1.begin();
   SPI1.setMOSI(IMU_SPI_MOSI_PIN);
   SPI1.setMISO(IMU_SPI_MISO_PIN);
   SPI1.setSCK(IMU_SPI_SCK_PIN);
+  SPI1.begin();
 
   bool detected = false;
   for (uint8_t attempt = 0; attempt < 3 && !detected; ++attempt) {

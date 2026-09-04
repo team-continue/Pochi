@@ -86,16 +86,15 @@ with PochiClient() as robot:
 
 ### Joint layout
 
-現時点の脚とCAN IDの対応は仮配置です。
+脚とCAN IDの対応です。各脚では足先側からIDが増えます。
 
 | Leg | Hip | Thigh | Calf |
 | --- | ---: | ---: | ---: |
-| Front left | 1 | 2 | 3 |
-| Front right | 4 | 5 | 6 |
-| Rear left | 7 | 8 | 9 |
-| Rear right | 10 | 11 | 12 |
+| Front left | 2 | 1 | 0 |
+| Rear left | 5 | 4 | 3 |
+| Rear right | 8 | 7 | 6 |
+| Front right | 11 | 10 | 9 |
 
-実機配線が確定したら`pochi_hardware/client/pochi_client/joint_layout.py`を変更します。
 Web画面には誤認防止のためCAN IDを常時表示します。
 
 ### テストとWebビルド

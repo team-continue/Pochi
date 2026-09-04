@@ -41,13 +41,16 @@ def main() -> None:
             did_work = False
             waiting = teensy.in_waiting
             if waiting:
-                for frame in decoder.feed(teensy.read(waiting)):
-                    try:
-                        decode_state(frame)
-                    except ProtocolError:
-                        continue
-                    udp.sendto(frame, args.state_dest)
-                    did_work = True
+                frames = decoder.feed(teensy.read(waiting))
+            else:
+                frames = []
+            for frame in frames:
+                try:
+                    decode_state(frame)
+                except ProtocolError:
+                    continue
+                udp.sendto(frame, args.state_dest)
+                did_work = True
 
             while True:
                 try:
