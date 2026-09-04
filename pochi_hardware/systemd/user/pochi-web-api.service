@@ -1,0 +1,15 @@
+[Unit]
+Description=Pochi UDP and WebSocket API
+After=pochi-teensy-bridge.service
+Wants=pochi-teensy-bridge.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/continue/Pochi
+ExecStart=/home/continue/.local/bin/uv run python -m pochi_hardware.web.server --host 127.0.0.1 --port 8765
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=default.target
+

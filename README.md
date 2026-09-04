@@ -37,7 +37,8 @@ ros2 run core_launch navigation.sh
 # ボディコントローラ単体
 ros2 launch core_launch navigation.launch.py environment:=real map_name:=curious_house.png
 
-# 実機ハードウェア
-ros2 launch core_hardware core_hardware.launch.py
 ```
 Launch 引数の詳細はドキュメントサイトの「クイックスタート」を参照してください。
+
+実機ハードウェア、Teensy通信、Web joint viewerのセットアップは
+[`pochi_hardware/README.md`](pochi_hardware/README.md)を参照してください。
