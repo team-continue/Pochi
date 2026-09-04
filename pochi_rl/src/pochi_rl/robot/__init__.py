@@ -19,6 +19,8 @@ from pochi_rl.robot.pochi_constants import (
   RS02_PEAK_TORQUE_NM,
   RS02_RATED_TORQUE_NM,
   RS02_REFLECTED_INERTIA,
+  SHANK_LENGTH,
+  THIGH_LENGTH,
 )
 
 __all__ = [
@@ -40,4 +42,6 @@ __all__ = [
   "RS02_PEAK_TORQUE_NM",
   "RS02_RATED_TORQUE_NM",
   "RS02_REFLECTED_INERTIA",
+  "SHANK_LENGTH",
+  "THIGH_LENGTH",
 ]
