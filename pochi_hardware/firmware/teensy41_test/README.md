@@ -66,6 +66,10 @@ cycle it first.
 
 ## USB / UDP
 
+The Teensy built-in LED stays off without valid host commands and blinks at
+20 Hz while valid command packets are arriving from the Orin. This indicates
+host communication only; it does not indicate that motor torque is enabled.
+
 ```bash
 cd ~/Documents/GitHub/Pochi
 uv sync

@@ -140,9 +140,13 @@ inline size_t next_motor_index = 0;
 inline bool has_command = false;
 inline bool emergency_stop = false;
 
-inline bool command_alive() {
-  return has_command && !emergency_stop &&
+inline bool host_communication_alive() {
+  return has_command &&
          static_cast<uint32_t>(millis() - last_command_ms) <= CAN3_COMMAND_TIMEOUT_MS;
+}
+
+inline bool command_alive() {
+  return host_communication_alive() && !emergency_stop;
 }
 
 inline void receive_callback(const CAN_message_t &message) {
@@ -329,6 +333,10 @@ inline void can3_loop() {
 
 inline bool can3_command_alive() {
   return can3_detail::command_alive();
+}
+
+inline bool can3_host_communication_alive() {
+  return can3_detail::host_communication_alive();
 }
 
 inline size_t can3_connected_count() {
