@@ -3,6 +3,8 @@ logs/
 build/
 bin/
 lib/
+!pochi_hardware/web/lib/
+!pochi_hardware/web/lib/utils.ts
 msg_gen/
 srv_gen/
 msg/*Action.msg

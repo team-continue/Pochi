@@ -22,8 +22,8 @@ dev = [
 package = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["hardware/client/pochi_client"]
+packages = ["pochi_hardware/client/pochi_client"]
 
 [tool.pytest.ini_options]
-pythonpath = [".", "hardware/client", "pochi_hardware/src"]
-testpaths = ["hardware/test", "pochi_hardware/test"]
+pythonpath = [".", "pochi_hardware/client", "pochi_hardware/src"]
+testpaths = ["pochi_hardware/test"]

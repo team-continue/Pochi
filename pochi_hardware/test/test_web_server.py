@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from hardware.web.server import MOTOR_CONNECTED, WebControlService
+from pochi_hardware.web.server import MOTOR_CONNECTED, WebControlService
 from pochi_client import ClientStats, Header, ImuState, MotorState, StatePacket
 from pochi_client.protocol import IMU_STATE_RECORD, MOTOR_STATE_RECORD
 

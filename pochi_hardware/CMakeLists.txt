@@ -9,25 +9,11 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-O3 -Wall -Wextra -Wpedantic)
 endif()
 
-find_package(ament_cmake_auto REQUIRED)
-
-ament_auto_find_build_dependencies()
+find_package(ament_cmake REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-#ament_auto_add_executable(temp src/temp.cpp)
-
-install(
-  DIRECTORY include
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(TARGETS
-  #temp
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-ament_auto_package()
+ament_package()
