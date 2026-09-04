@@ -16,6 +16,10 @@ constexpr uint16_t USB_FLAG_EMERGENCY_STOP = 1U << 0;
 constexpr uint16_t USB_STATE_COMMAND_ALIVE = 1U << 0;
 constexpr uint16_t USB_STATE_ANY_FAULT = 1U << 1;
 constexpr uint16_t USB_STATE_ALL_INITIALIZED = 1U << 2;
+constexpr uint16_t USB_STATE_CAN_INITIALIZING = 1U << 3;
+constexpr uint16_t USB_STATE_CAN_READY = 1U << 4;
+constexpr uint16_t USB_STATE_REARM_REQUIRED = 1U << 5;
+constexpr uint16_t USB_STATE_TORQUE_ACTIVE = 1U << 6;
 
 constexpr size_t USB_HEADER_BYTES = 24;
 constexpr size_t USB_COMMAND_RECORD_BYTES = 24;
@@ -307,6 +311,10 @@ inline void send_state() {
   }
   state_flags |= any_fault ? USB_STATE_ANY_FAULT : 0U;
   state_flags |= all_initialized ? USB_STATE_ALL_INITIALIZED : 0U;
+  state_flags |= can3_initializing() ? USB_STATE_CAN_INITIALIZING : 0U;
+  state_flags |= can3_ready() ? USB_STATE_CAN_READY : 0U;
+  state_flags |= can3_rearm_required() ? USB_STATE_REARM_REQUIRED : 0U;
+  state_flags |= can3_torque_active() ? USB_STATE_TORQUE_ACTIVE : 0U;
 
   write_header(USB_MESSAGE_STATE,
                state_flags,

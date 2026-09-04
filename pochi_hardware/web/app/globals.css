@@ -459,11 +459,102 @@ button {
     monospace;
 }
 
+.gain-card {
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid #263244;
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgb(24 34 49 / 76%), rgb(14 21 32 / 78%));
+}
+.gain-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.gain-heading span,
+.gain-heading small {
+  display: block;
+}
+.gain-heading span {
+  color: #a9b6c7;
+  font-size: 11px;
+  font-weight: 700;
+}
+.gain-heading small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 9px;
+}
+.gain-heading strong {
+  color: #7dd3fc;
+  font: 650 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+.gain-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 8px;
+  margin-top: 11px;
+}
+.gain-controls label span {
+  display: block;
+  margin-bottom: 4px;
+  color: #7c8ba0;
+  font-size: 9px;
+}
+.gain-controls input {
+  width: 100%;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  outline: none;
+  background: #0e151f;
+  color: #e0f2fe;
+  font: 650 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gain-controls input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 10%);
+}
+.gain-controls button {
+  height: 34px;
+  font-size: 10px;
+  font-weight: 750;
+}
+.zero-targets-button {
+  width: 100%;
+  height: 32px;
+  margin-top: 9px;
+  border-color: rgb(251 191 36 / 30%);
+  color: #fcd34d;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.zero-targets-button:hover:not(:disabled) {
+  border-color: rgb(251 191 36 / 55%);
+  background: rgb(245 158 11 / 10%);
+  color: #fde68a;
+}
+.zero-targets-button svg {
+  width: 13px;
+  height: 13px;
+}
+
 .joint-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 6px;
   margin-top: 14px;
+}
+.joint-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 4px;
+  min-width: 0;
 }
 .joint-button {
   display: grid;
@@ -479,6 +570,33 @@ button {
   color: #7f8ea3;
   cursor: pointer;
   transition: 0.15s ease;
+}
+.motor-torque-button {
+  height: 39px;
+  border: 1px solid #334155;
+  border-radius: 7px;
+  background: #111925;
+  color: #94a3b8;
+  cursor: pointer;
+  font:
+    750 9px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  transition: 0.15s ease;
+}
+.motor-torque-button:hover:not(:disabled) {
+  border-color: #38bdf8;
+  color: #bae6fd;
+}
+.motor-torque-button.requested {
+  border-color: rgb(244 63 94 / 48%);
+  background: rgb(244 63 94 / 14%);
+  color: #fda4af;
+}
+.motor-torque-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 .joint-button:hover {
   border-color: #3e5068;

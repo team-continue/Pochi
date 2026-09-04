@@ -47,9 +47,13 @@ type MotorState = {
   tempMosC: number | null;
   busVoltageV: number | null;
   ageMs: number | null;
+  status: number | null;
   flags: number;
   faultCode: number;
   state: string;
+  torqueRequested: boolean;
+  torqueEnabled: boolean;
+  canEnableTorque: boolean;
 };
 
 type ImuState = {
@@ -74,7 +78,18 @@ type RobotState = {
   canEnableTorque: boolean;
   unavailableMotorIds: number[];
   torqueEnabled: boolean;
+  torqueRequested: boolean;
+  activeTorqueCount: number;
+  requestedTorqueCount: number;
+  allTorqueEnabled: boolean;
+  safetyState: string;
+  initializing: boolean;
+  rearmRequired: boolean;
   emergencyStop: boolean;
+  gains: {
+    kp: number;
+    kd: number;
+  };
   stateAgeMs: number | null;
   motors: MotorState[];
   imu: ImuState;
@@ -118,9 +133,13 @@ const EMPTY_MOTORS: MotorState[] = JOINTS.map(
     tempMosC: null,
     busVoltageV: null,
     ageMs: null,
+    status: null,
     flags: 0,
     faultCode: 0,
     state: 'NO DATA',
+    torqueRequested: false,
+    torqueEnabled: false,
+    canEnableTorque: false,
   }),
 );
 
@@ -146,7 +165,18 @@ const EMPTY_STATE: RobotState = {
   canEnableTorque: false,
   unavailableMotorIds: Array.from({ length: 12 }, (_, index) => index),
   torqueEnabled: false,
+  torqueRequested: false,
+  activeTorqueCount: 0,
+  requestedTorqueCount: 0,
+  allTorqueEnabled: false,
+  safetyState: 'WAITING FOR MOTORS',
+  initializing: true,
+  rearmRequired: true,
   emergencyStop: false,
+  gains: {
+    kp: 40,
+    kd: 1,
+  },
   stateAgeMs: null,
   motors: EMPTY_MOTORS,
   imu: EMPTY_IMU,
@@ -161,7 +191,7 @@ const EMPTY_STATE: RobotState = {
 };
 
 const LIMITS_DEG: Record<string, [number, number]> = {
-  hip: [-30, 90],
+  hip: [-40, 90],
   thigh: [-90, 90],
   calf: [-135, 135],
 };
@@ -177,6 +207,13 @@ function viewerAngle(motor: MotorState): number {
 
 function degrees(rad: number | null): number | null {
   return rad === null ? null : (rad * 180) / Math.PI;
+}
+
+function motorModeText(status: number | null): string {
+  if (status === 0) return 'RESET';
+  if (status === 1) return 'CALIBRATION';
+  if (status === 2) return 'RUN';
+  return 'UNKNOWN';
 }
 
 function radians(deg: number): number {
@@ -240,6 +277,7 @@ function useRobotSocket() {
           ...previous,
           connected: false,
           torqueEnabled: false,
+          torqueRequested: false,
         }));
         retryTimer = setTimeout(connect, 1200);
       };
@@ -678,6 +716,9 @@ export default function Home() {
   const selected =
     state.motors.find((motor) => motor.id === selectedId) ?? state.motors[0];
   const [localTargetDeg, setLocalTargetDeg] = useState(0);
+  const [gainsDirty, setGainsDirty] = useState(false);
+  const gainKpInput = useRef<HTMLInputElement>(null);
+  const gainKdInput = useRef<HTMLInputElement>(null);
   const lastRemoteTarget = useRef<number | null>(null);
   const hardwareLive = connection === 'connected' && state.connected;
   const allMotorsLive =
@@ -706,7 +747,34 @@ export default function Home() {
   };
 
   const toggleTorque = () =>
-    send({ type: 'torque', enabled: !state.torqueEnabled });
+    send({ type: 'torque', enabled: !state.torqueRequested });
+
+  const toggleMotorTorque = (motor: MotorState) => {
+    setSelectedId(motor.id);
+    send({
+      type: 'motorTorque',
+      motorId: motor.id,
+      enabled: !motor.torqueRequested,
+    });
+  };
+
+  const applyGains = () => {
+    const parsedKp = Number(gainKpInput.current?.value);
+    const parsedKd = Number(gainKdInput.current?.value);
+    if (
+      !Number.isFinite(parsedKp) ||
+      !Number.isFinite(parsedKd) ||
+      parsedKp < 0 ||
+      parsedKp > 5000 ||
+      parsedKd < 0 ||
+      parsedKd > 100
+    )
+      return;
+    send({ type: 'gains', kp: parsedKp, kd: parsedKd });
+    setGainsDirty(false);
+  };
+
+  const armPending = state.requestedTorqueCount > state.activeTorqueCount;
 
   return (
     <main className="app-shell">
@@ -728,10 +796,18 @@ export default function Home() {
           <Badge
             variant="outline"
             className={
-              state.torqueEnabled ? 'status-torque-on' : 'status-torque-off'
+              state.activeTorqueCount > 0
+                ? 'status-torque-on'
+                : 'status-torque-off'
             }
           >
-            <Power /> Torque {state.torqueEnabled ? 'ON' : 'OFF'}
+            <Power /> Torque {state.activeTorqueCount}/{state.expectedCount}
+          </Badge>
+          <Badge
+            variant="outline"
+            className={state.safetyState === 'MIT ACTIVE' ? 'status-ok' : 'status-warn'}
+          >
+            <Activity /> {state.safetyState}
           </Badge>
           <span className="top-metric">
             <Activity /> {state.connectedCount}/{state.expectedCount} motors
@@ -744,15 +820,20 @@ export default function Home() {
           </span>
           <Button
             size="lg"
-            variant={state.torqueEnabled ? 'destructive' : 'default'}
-            className={state.torqueEnabled ? 'torque-on' : 'torque-off'}
+            variant={state.torqueRequested ? 'destructive' : 'default'}
+            className={state.torqueRequested ? 'torque-on' : 'torque-off'}
             disabled={
               connection !== 'connected' ||
-              (!state.canEnableTorque && !state.torqueEnabled)
+              (!state.canEnableTorque && !state.torqueRequested)
             }
             onClick={toggleTorque}
           >
-            <Power /> {state.torqueEnabled ? 'TURN OFF' : 'TURN ON'}
+            <Power />{' '}
+            {state.torqueRequested
+              ? armPending
+                ? 'CANCEL ARMING'
+                : 'TURN OFF ALL'
+              : 'TURN ON ALL'}
           </Button>
         </div>
       </header>
@@ -785,7 +866,7 @@ export default function Home() {
               <div>
                 <span>Torque</span>
                 <strong className={state.torqueEnabled ? 'danger' : 'safe'}>
-                  {state.torqueEnabled ? 'ON' : 'OFF'}
+                  {state.activeTorqueCount} / {state.expectedCount}
                 </strong>
               </div>
               <div>
@@ -839,6 +920,71 @@ export default function Home() {
             <small>{numberText(selected.positionRad, 4)} rad</small>
           </div>
 
+          <form
+            className="gain-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              applyGains();
+            }}
+          >
+            <div className="gain-heading">
+              <div>
+                <span>MIT gains · all joints</span>
+                <small>Applied to all enabled motors</small>
+              </div>
+              <strong>
+                Kp {numberText(state.gains.kp, 1)} · Kd{' '}
+                {numberText(state.gains.kd, 2)}
+              </strong>
+            </div>
+            <div className="gain-controls">
+              <label>
+                <span>Kp</span>
+                <input
+                  key={`kp-${state.gains.kp}`}
+                  ref={gainKpInput}
+                  type="number"
+                  min="0"
+                  max="5000"
+                  step="1"
+                  defaultValue={state.gains.kp}
+                  required
+                  onChange={() => setGainsDirty(true)}
+                />
+              </label>
+              <label>
+                <span>Kd</span>
+                <input
+                  key={`kd-${state.gains.kd}`}
+                  ref={gainKdInput}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  defaultValue={state.gains.kd}
+                  required
+                  onChange={() => setGainsDirty(true)}
+                />
+              </label>
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={connection !== 'connected' || !gainsDirty}
+              >
+                APPLY
+              </Button>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="zero-targets-button"
+              disabled={connection !== 'connected'}
+              onClick={() => send({ type: 'zeroTargets' })}
+            >
+              <RotateCcw /> SET ALL TARGETS TO 0°
+            </Button>
+          </form>
+
           <div className="position-card">
             <div className="position-readout">
               <div>
@@ -859,7 +1005,7 @@ export default function Home() {
               min={limits[0]}
               max={limits[1]}
               step={0.5}
-              disabled={!state.torqueEnabled || !state.connected}
+              disabled={!selected.torqueEnabled || !state.connected}
               onValueChange={(value) =>
                 setTarget(typeof value === 'number' ? value : value[0])
               }
@@ -870,10 +1016,10 @@ export default function Home() {
               <span>Actual {numberText(selected.positionDeg)}°</span>
               <span>{limits[1]}°</span>
             </div>
-            {!state.torqueEnabled && (
+            {!selected.torqueEnabled && (
               <p className="safety-note">
-                Torque starts OFF. Turning it ON initializes every target from
-                the live pose.
+                This joint starts OFF. Turning it ON captures its live pose as
+                the initial target.
               </p>
             )}
             {!state.canEnableTorque && state.connected && (
@@ -886,34 +1032,54 @@ export default function Home() {
           </div>
 
           <div className="joint-grid" aria-label="Encoder selection">
-            {state.motors.map((motor) => (
-              <button
-                key={motor.id}
-                className={
-                  motor.id === selectedId
-                    ? 'joint-button selected'
-                    : 'joint-button'
-                }
-                onClick={() => setSelectedId(motor.id)}
-                title={`${motor.label}, CAN ID ${motor.id}`}
-              >
-                <span>
-                  <b>{motor.id}</b>
-                  {motor.label}
-                </span>
-                <strong>{numberText(motor.positionDeg, 1)}°</strong>
-                <i
-                  className={
-                    motor.faultCode
-                      ? 'fault'
-                      : motor.state === 'ENCODER LIVE' ||
-                          motor.state === 'MIT ENABLED'
-                        ? 'online'
-                        : ''
-                  }
-                />
-              </button>
-            ))}
+            {state.motors.map((motor) => {
+              const motorArming =
+                motor.torqueRequested && !motor.torqueEnabled;
+              return (
+                <div className="joint-control" key={motor.id}>
+                  <button
+                    className={
+                      motor.id === selectedId
+                        ? 'joint-button selected'
+                        : 'joint-button'
+                    }
+                    onClick={() => setSelectedId(motor.id)}
+                    title={`${motor.label}, CAN ID ${motor.id}`}
+                  >
+                    <span>
+                      <b>{motor.id}</b>
+                      {motor.label}
+                    </span>
+                    <strong>{numberText(motor.positionDeg, 1)}°</strong>
+                    <i
+                      className={
+                        motor.faultCode
+                          ? 'fault'
+                          : motor.state === 'ENCODER LIVE' ||
+                              motor.state === 'MIT RUN'
+                            ? 'online'
+                            : ''
+                      }
+                    />
+                  </button>
+                  <button
+                    className={
+                      motor.torqueRequested
+                        ? 'motor-torque-button requested'
+                        : 'motor-torque-button'
+                    }
+                    disabled={
+                      connection !== 'connected' ||
+                      (!motor.canEnableTorque && !motor.torqueRequested)
+                    }
+                    onClick={() => toggleMotorTorque(motor)}
+                    title={`Torque ${motor.torqueRequested ? 'OFF' : 'ON'} for ID ${motor.id}`}
+                  >
+                    {motorArming ? 'ARM' : motor.torqueEnabled ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           <div className="imu-card">
@@ -970,6 +1136,7 @@ export default function Home() {
                     : 'No data'
               }
             />
+            <Metric label="Motor mode" value={motorModeText(selected.status)} />
             <Metric
               label="MOS temp"
               value={`${numberText(selected.tempMosC)} °C`}
@@ -991,7 +1158,7 @@ export default function Home() {
                   selected.faultCode
                     ? 'state-dot fault'
                     : selected.state === 'ENCODER LIVE' ||
-                        selected.state === 'MIT ENABLED'
+                        selected.state === 'MIT RUN'
                       ? 'state-dot online'
                       : 'state-dot'
                 }

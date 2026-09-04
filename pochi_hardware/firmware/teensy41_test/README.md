@@ -70,6 +70,37 @@ The Teensy built-in LED stays off without valid host commands and blinks at
 20 Hz while valid command packets are arriving from the Orin. This indicates
 host communication only; it does not indicate that motor torque is enabled.
 
+Motor control uses a latched safety state. At boot, after a host-command
+timeout, or when any RoboStride response is stale for 250 ms, the Teensy stops
+all 12 motors and returns to non-blocking initialization. All motors must stay
+responsive for 500 ms before the state becomes READY. Recovery never restores
+torque automatically: the Teensy must receive an all-disabled command followed
+by a fresh all-enabled command from the web UI. Enabling starts from the live
+joint pose.
+
+The command packet carries an independent Enable bit for every motor. The web
+UI can request all motors or any subset, and unselected actuators remain in
+`Reset` while their encoders are still sampled. Selected motors are enabled in
+CAN-ID order, one at a time. An unconfirmed actuator receives another Enable
+request every 50 ms, up to 20 attempts. After it answers with motor mode `Run`,
+its captured-position MIT command becomes active and the firmware waits 500 ms
+before starting the next selected actuator. A missing confirmation after 20
+attempts or a later return to `Reset` stops every motor and latches another
+re-arm request. The web UI reports `ENABLE PENDING`, `RESET`, `CALIBRATION`, and
+`RUN` from actuator feedback rather than from the outgoing command alone.
+
+Immediately before each Enable sequence, the Teensy captures that actuator's
+latest encoder position and sends it as an MIT goal. It sends the same goal
+again immediately after every Enable request and holds it for the first 100 ms
+after the `Run` reply. This prevents a target retained by the actuator from a
+previous run from moving the joint during startup.
+
+Joint targets are converted back to the raw MIT coordinate using the `2pi`
+equivalent angle nearest to the latest raw encoder reading. A plain
+`offset + joint` conversion can cross the absolute-encoder wrap and request a
+position one full revolution away while still appearing numerically valid in
+the RS03 `[-4pi, 4pi]` MIT range.
+
 ```bash
 cd ~/Documents/GitHub/Pochi
 uv sync

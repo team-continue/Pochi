@@ -179,6 +179,8 @@ FCTP_CLASS class RoboStride : public MotorBase {
     float accumulated_position_rad_ = 0.f;
     float prev_raw_position_rad_ = 0.f;
     bool first_feedback_received_ = true;
+    float latest_raw_position_rad_ = 0.f;
+    bool latest_raw_position_valid_ = false;
 
     float mit_velocity_command_rad_s_ = 0.f; // For velocity control mode
     float mit_torque_command_nm_ = 0.f; // For torque control mode
@@ -220,15 +222,32 @@ public:
 
     // Keep the rest of the firmware in joint coordinates: zero is the
     // configured reference pose and the result is always in [-pi, pi].
-    float rawToJointPosition(float raw_position_rad) const {
+    float rawToJointPosition(float raw_position_rad) {
+        latest_raw_position_rad_ = raw_position_rad;
+        latest_raw_position_valid_ = true;
         return normalizeAngle(raw_position_rad - pos_offset_);
     }
 
-    // MIT commands use the motor's raw encoder coordinate. Since the offset is
-    // in [0, 2pi) and the joint target is normalized, this remains inside the
-    // RS03 Type-2 position range [-4pi, 4pi].
+    // MIT commands use a multi-turn raw coordinate. offset + joint alone can
+    // select the wrong 2pi branch around the absolute encoder wrap (notably
+    // IDs 5 and 8), even though the number is still inside [-4pi, 4pi]. Pick
+    // the equivalent raw angle nearest to the latest encoder reading.
     float jointToRawPosition(float joint_position_rad) const {
-        return pos_offset_ + normalizeAngle(joint_position_rad);
+        float raw_position_rad =
+            pos_offset_ + normalizeAngle(joint_position_rad);
+        if (latest_raw_position_valid_) {
+            constexpr float two_pi = 2.0f * static_cast<float>(M_PI);
+            raw_position_rad +=
+                roundf((latest_raw_position_rad_ - raw_position_rad) / two_pi) *
+                two_pi;
+        }
+
+        const auto &operation =
+            ACTUATOR_OPERATION_MAPPING.at(static_cast<ActuatorType>(actuator_type_));
+        return constrain(
+            raw_position_rad,
+            -static_cast<float>(operation.position),
+            static_cast<float>(operation.position));
     }
 
     // ===========
@@ -623,8 +642,14 @@ private:
         result.extra_data = data_area2;
         result.host_id = id_dst;
 
-        error_code_ = (uint8_t)((can_id >> 16) & 0x3F);
-        pattern_    = (uint8_t)((can_id >> 22) & 0x03);
+        // Only type-2 motor feedback carries the six fault bits and two mode
+        // bits in the arbitration ID. Type-17 parameter replies use the same
+        // bit range as a read result (0=success, 1=failure); treating that as
+        // an undervoltage fault caused false global shutdowns while polling.
+        if (comm_type == Communication_Type_MotorRequest) {
+            error_code_ = (uint8_t)((can_id >> 16) & 0x3F);
+            pattern_    = (uint8_t)((can_id >> 22) & 0x03);
+        }
 
         memcpy(result.data, r_msg.buf, r_msg.len);
         result.len = r_msg.len;

@@ -6,24 +6,38 @@ import asyncio
 import contextlib
 import math
 import threading
+import time
 from collections.abc import AsyncIterator
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
-from pochi_client import COMMAND_ENABLE, CONTROL_MIT, JOINTS, JOINT_BY_ID, MotorCommand, PochiClient
+from pochi_client import (
+    COMMAND_ENABLE,
+    CONTROL_MIT,
+    JOINTS,
+    JOINT_BY_ID,
+    STATE_CAN_INITIALIZING,
+    STATE_CAN_READY,
+    STATE_REARM_REQUIRED,
+    STATE_TORQUE_ACTIVE,
+    MotorCommand,
+    PochiClient,
+)
 
 MOTOR_INITIALIZED = 1 << 0
 MOTOR_CONNECTED = 1 << 1
 MOTOR_FEEDBACK_VALID = 1 << 2
 MOTOR_ENABLE_REQUESTED = 1 << 3
 MOTOR_FAULT = 1 << 6
+MOTOR_ENABLE_PENDING = 1 << 7
+MOTOR_MODE_RUN = 2
 IMU_INITIALIZED = 1 << 0
 IMU_SAMPLE_VALID = 1 << 1
 
 JOINT_LIMITS_RAD = {
-    "hip": (-math.pi / 6.0, math.pi / 2.0),
+    "hip": (math.radians(-40.0), math.pi / 2.0),
     "thigh": (-math.pi / 2.0, math.pi / 2.0),
     "calf": (-3.0 * math.pi / 4.0, 3.0 * math.pi / 4.0),
 }
@@ -33,11 +47,17 @@ def _finite(value: float) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def _motor_state_text(flags: int, fault_code: int) -> str:
+def _motor_mode_text(status: int) -> str:
+    return {0: "RESET", 1: "CALIBRATION", 2: "RUN"}.get(status, "UNKNOWN")
+
+
+def _motor_state_text(flags: int, fault_code: int, status: int) -> str:
     if flags & MOTOR_FAULT:
         return f"FAULT {fault_code}"
+    if flags & MOTOR_ENABLE_PENDING:
+        return f"ENABLE PENDING ({_motor_mode_text(status)})"
     if flags & MOTOR_ENABLE_REQUESTED:
-        return "MIT ENABLED"
+        return "MIT RUN" if status == 2 else f"MODE {_motor_mode_text(status)}"
     if flags & MOTOR_CONNECTED:
         return "ENCODER LIVE"
     if flags & MOTOR_FEEDBACK_VALID:
@@ -59,12 +79,16 @@ def _quaternion_to_rpy_deg(w: float, x: float, y: float, z: float) -> tuple[floa
 class WebControlService:
     """Own the browser control state and keep torque off until explicit opt-in."""
 
-    def __init__(self, client: PochiClient, *, kp: float = 20.0, kd: float = 0.5) -> None:
+    def __init__(self, client: PochiClient, *, kp: float = 40.0, kd: float = 1.0) -> None:
         self.client = client
         self.kp = kp
         self.kd = kd
         self.torque_enabled = False
+        self._requested_motor_ids: set[int] = set()
         self.emergency_stop = False
+        self._enable_pending_until = 0.0
+        self._firmware_active_seen = False
+        self._firmware_arm_accepted = False
         self.browser_count = 0
         self._targets = {joint.motor_id: 0.0 for joint in JOINTS}
         self._lock = threading.Lock()
@@ -80,14 +104,16 @@ class WebControlService:
         if should_disable:
             self.disable_all()
 
-    def unavailable_motor_ids(self) -> list[int]:
+    def unavailable_motor_ids(self, motor_ids: set[int] | None = None) -> list[int]:
         state = self.client.latest_state()
+        selected_ids = set(JOINT_BY_ID) if motor_ids is None else motor_ids
         if state is None:
-            return [joint.motor_id for joint in JOINTS]
+            return sorted(selected_ids)
         by_id = {motor.motor_id: motor for motor in state.motors}
         return [
             joint.motor_id
             for joint in JOINTS
+            if joint.motor_id in selected_ids
             if (motor := by_id.get(joint.motor_id)) is None
             or not math.isfinite(motor.position_rad)
             or not (motor.flags & MOTOR_CONNECTED)
@@ -100,13 +126,14 @@ class WebControlService:
         ]
 
     def enable_all(self) -> None:
+        state = self.client.latest_state()
+        if state is None or not (state.header.flags & STATE_CAN_READY):
+            raise ValueError("Teensy is still initializing; wait for READY before enabling torque")
         unavailable = self.unavailable_motor_ids()
         if unavailable:
             joined = ", ".join(map(str, unavailable))
             raise ValueError(f"valid feedback is required from all motors; unavailable IDs: {joined}")
 
-        state = self.client.latest_state()
-        assert state is not None
         by_id = {motor.motor_id: motor for motor in state.motors}
         commands: list[MotorCommand] = []
         targets: dict[int, float] = {}
@@ -130,13 +157,61 @@ class WebControlService:
             self.client.clear_emergency_stop()
             self.client.set_all_mit(commands)
             self._targets = targets
+            self._requested_motor_ids = set(JOINT_BY_ID)
             self.emergency_stop = False
             self.torque_enabled = True
+            self._enable_pending_until = time.monotonic() + 1.0
+            self._firmware_active_seen = False
+            self._firmware_arm_accepted = False
 
     def disable_all(self) -> None:
         with self._lock:
             self.client.disable_all()
             self.torque_enabled = False
+            self._requested_motor_ids.clear()
+            self._enable_pending_until = 0.0
+            self._firmware_active_seen = False
+            self._firmware_arm_accepted = False
+
+    def set_motor_enabled(self, motor_id: int, enabled: bool) -> None:
+        if isinstance(motor_id, bool) or motor_id not in JOINT_BY_ID:
+            raise ValueError("motorId must be an integer from 0 through 11")
+
+        if not enabled:
+            with self._lock:
+                self.client.disable(motor_id)
+                self._requested_motor_ids.discard(motor_id)
+                self.torque_enabled = bool(self._requested_motor_ids)
+                if not self.torque_enabled:
+                    self._enable_pending_until = 0.0
+                    self._firmware_active_seen = False
+                    self._firmware_arm_accepted = False
+            return
+
+        state = self.client.latest_state()
+        if state is None or not (state.header.flags & STATE_CAN_READY):
+            raise ValueError("Teensy is still initializing; wait for READY before enabling torque")
+        unavailable = self.unavailable_motor_ids({motor_id})
+        if unavailable:
+            raise ValueError(f"valid feedback is required from motor ID {motor_id}")
+        motor = next(motor for motor in state.motors if motor.motor_id == motor_id)
+
+        with self._lock:
+            self.client.clear_emergency_stop()
+            self._targets[motor_id] = motor.position_rad
+            self.client.set_mit(
+                motor_id,
+                position_rad=motor.position_rad,
+                velocity_rad_s=0.0,
+                kp=self.kp,
+                kd=self.kd,
+                torque_nm=0.0,
+                enable=True,
+            )
+            self._requested_motor_ids.add(motor_id)
+            self.torque_enabled = True
+            self.emergency_stop = False
+            self._enable_pending_until = time.monotonic() + 1.5
 
     def set_target(self, motor_id: int, display_position_rad: float) -> None:
         if isinstance(motor_id, bool) or motor_id not in JOINT_BY_ID:
@@ -148,10 +223,45 @@ class WebControlService:
         clamped = max(low, min(high, display_position_rad))
         with self._lock:
             self._targets[motor_id] = clamped
-            if self.torque_enabled:
+            if motor_id in self._requested_motor_ids:
                 self.client.set_mit(
                     motor_id,
                     position_rad=clamped,
+                    velocity_rad_s=0.0,
+                    kp=self.kp,
+                    kd=self.kd,
+                    torque_nm=0.0,
+                    enable=True,
+                )
+
+    def set_gains(self, kp: float, kd: float) -> None:
+        if not math.isfinite(kp) or not 0.0 <= kp <= 5000.0:
+            raise ValueError("gains.kp must be finite and between 0 and 5000")
+        if not math.isfinite(kd) or not 0.0 <= kd <= 100.0:
+            raise ValueError("gains.kd must be finite and between 0 and 100")
+
+        with self._lock:
+            self.kp = kp
+            self.kd = kd
+            for motor_id in sorted(self._requested_motor_ids):
+                self.client.set_mit(
+                    motor_id,
+                    position_rad=self._targets[motor_id],
+                    velocity_rad_s=0.0,
+                    kp=self.kp,
+                    kd=self.kd,
+                    torque_nm=0.0,
+                    enable=True,
+                )
+
+    def zero_all_targets(self) -> None:
+        with self._lock:
+            for motor_id in self._targets:
+                self._targets[motor_id] = 0.0
+            for motor_id in sorted(self._requested_motor_ids):
+                self.client.set_mit(
+                    motor_id,
+                    position_rad=0.0,
                     velocity_rad_s=0.0,
                     kp=self.kp,
                     kd=self.kd,
@@ -164,6 +274,69 @@ class WebControlService:
             self.client.emergency_stop()
             self.emergency_stop = True
             self.torque_enabled = False
+            self._requested_motor_ids.clear()
+            self._enable_pending_until = 0.0
+            self._firmware_active_seen = False
+            self._firmware_arm_accepted = False
+
+    def _sync_firmware_safety(self, state: object | None) -> None:
+        if state is None:
+            return
+        header = getattr(state, "header", None)
+        flags = getattr(header, "flags", 0)
+        firmware_active = bool(flags & STATE_TORQUE_ACTIVE)
+        rearm_required = bool(flags & STATE_REARM_REQUIRED)
+        should_disable = False
+        pending_target_updates: list[tuple[int, float]] = []
+        with self._lock:
+            if self.torque_enabled and not rearm_required:
+                self._firmware_arm_accepted = True
+            if firmware_active:
+                self._firmware_active_seen = True
+                self._enable_pending_until = 0.0
+            elif self.torque_enabled and rearm_required:
+                enable_timed_out = (
+                    self._enable_pending_until > 0.0
+                    and time.monotonic() >= self._enable_pending_until
+                )
+                if (
+                    self._firmware_active_seen
+                    or self._firmware_arm_accepted
+                    or enable_timed_out
+                ):
+                    self.torque_enabled = False
+                    self._requested_motor_ids.clear()
+                    self._enable_pending_until = 0.0
+                    self._firmware_active_seen = False
+                    self._firmware_arm_accepted = False
+                    should_disable = True
+            if self.torque_enabled and not firmware_active and not should_disable:
+                # Staggered arming takes several seconds. Pending motors must
+                # follow their latest passive pose instead of moving toward
+                # the stale pose captured when ON was first pressed.
+                for motor in getattr(state, "motors", []):
+                    if (
+                        motor.motor_id in self._requested_motor_ids
+                        and motor.status != MOTOR_MODE_RUN
+                        and math.isfinite(motor.position_rad)
+                    ):
+                        self._targets[motor.motor_id] = motor.position_rad
+                        pending_target_updates.append(
+                            (motor.motor_id, motor.position_rad)
+                        )
+        if should_disable:
+            self.client.disable_all()
+        else:
+            for motor_id, position_rad in pending_target_updates:
+                self.client.set_mit(
+                    motor_id,
+                    position_rad=position_rad,
+                    velocity_rad_s=0.0,
+                    kp=self.kp,
+                    kd=self.kd,
+                    torque_nm=0.0,
+                    enable=True,
+                )
 
     def handle_message(self, message: dict[str, object]) -> None:
         message_type = message.get("type")
@@ -172,6 +345,15 @@ class WebControlService:
             if not isinstance(enabled, bool):
                 raise ValueError("torque.enabled must be a boolean")
             self.enable_all() if enabled else self.disable_all()
+            return
+        if message_type == "motorTorque":
+            motor_id = message.get("motorId")
+            enabled = message.get("enabled")
+            if isinstance(motor_id, bool) or not isinstance(motor_id, int):
+                raise ValueError("motorTorque.motorId must be an integer")
+            if not isinstance(enabled, bool):
+                raise ValueError("motorTorque.enabled must be a boolean")
+            self.set_motor_enabled(motor_id, enabled)
             return
         if message_type == "target":
             motor_id = message.get("motorId")
@@ -182,6 +364,18 @@ class WebControlService:
                 raise ValueError("target.positionRad must be a number")
             self.set_target(motor_id, float(position))
             return
+        if message_type == "gains":
+            kp = message.get("kp")
+            kd = message.get("kd")
+            if isinstance(kp, bool) or not isinstance(kp, (int, float)):
+                raise ValueError("gains.kp must be a number")
+            if isinstance(kd, bool) or not isinstance(kd, (int, float)):
+                raise ValueError("gains.kd must be a number")
+            self.set_gains(float(kp), float(kd))
+            return
+        if message_type == "zeroTargets":
+            self.zero_all_targets()
+            return
         if message_type == "emergencyStop":
             self.emergency_stop_all()
             return
@@ -189,15 +383,38 @@ class WebControlService:
 
     def snapshot(self) -> dict[str, object]:
         state = self.client.latest_state()
+        self._sync_firmware_safety(state)
         stats = self.client.stats()
         unavailable = self.unavailable_motor_ids()
         by_id = {motor.motor_id: motor for motor in state.motors} if state else {}
         motors: list[dict[str, object]] = []
         connected_count = 0
+        active_torque_count = 0
         with self._lock:
             targets = dict(self._targets)
-            torque_enabled = self.torque_enabled
+            requested_motor_ids = set(self._requested_motor_ids)
+            torque_requested = bool(requested_motor_ids)
             emergency_stop = self.emergency_stop
+            kp = self.kp
+            kd = self.kd
+
+        state_flags = state.header.flags if state is not None else 0
+        firmware_initializing = bool(state_flags & STATE_CAN_INITIALIZING)
+        firmware_ready = bool(state_flags & STATE_CAN_READY)
+        rearm_required = bool(state_flags & STATE_REARM_REQUIRED)
+        torque_active = bool(state_flags & STATE_TORQUE_ACTIVE)
+        if state is None or not self.client.connected:
+            safety_state = "NO DATA"
+        elif firmware_initializing:
+            safety_state = "INITIALIZING"
+        elif torque_active:
+            safety_state = "MIT ACTIVE"
+        elif firmware_ready and rearm_required:
+            safety_state = "READY / TORQUE OFF"
+        elif firmware_ready:
+            safety_state = "READY"
+        else:
+            safety_state = "WAITING FOR MOTORS"
 
         for joint in JOINTS:
             motor = by_id.get(joint.motor_id)
@@ -217,9 +434,13 @@ class WebControlService:
                         "tempMosC": None,
                         "busVoltageV": None,
                         "ageMs": None,
+                        "status": None,
                         "flags": 0,
                         "faultCode": 0,
                         "state": "NO DATA",
+                        "torqueRequested": joint.motor_id in requested_motor_ids,
+                        "torqueEnabled": False,
+                        "canEnableTorque": False,
                     }
                 )
                 continue
@@ -228,6 +449,18 @@ class WebControlService:
             position_value = _finite(position)
             connected = bool(motor.flags & MOTOR_CONNECTED) and position_value is not None
             connected_count += int(connected)
+            motor_torque_enabled = bool(motor.flags & MOTOR_ENABLE_REQUESTED) and (
+                motor.status == MOTOR_MODE_RUN
+            )
+            active_torque_count += int(motor_torque_enabled)
+            low, high = JOINT_LIMITS_RAD[joint.joint]
+            motor_can_enable = (
+                firmware_ready
+                and connected
+                and not bool(motor.flags & MOTOR_FAULT)
+                and position_value is not None
+                and low <= position_value <= high
+            )
             motors.append(
                 {
                     "id": joint.motor_id,
@@ -245,9 +478,15 @@ class WebControlService:
                     "ageMs": None
                     if motor.last_rx_age_us == 0xFFFFFFFF
                     else motor.last_rx_age_us / 1000.0,
+                    "status": motor.status,
                     "flags": motor.flags,
                     "faultCode": motor.fault_code,
-                    "state": _motor_state_text(motor.flags, motor.fault_code),
+                    "state": _motor_state_text(
+                        motor.flags, motor.fault_code, motor.status
+                    ),
+                    "torqueRequested": joint.motor_id in requested_motor_ids,
+                    "torqueEnabled": motor_torque_enabled,
+                    "canEnableTorque": motor_can_enable,
                 }
             )
 
@@ -297,10 +536,18 @@ class WebControlService:
             "connected": self.client.connected,
             "connectedCount": connected_count,
             "expectedCount": len(JOINTS),
-            "canEnableTorque": not unavailable and self.client.connected,
+            "canEnableTorque": not unavailable and self.client.connected and firmware_ready,
             "unavailableMotorIds": unavailable,
-            "torqueEnabled": torque_enabled,
+            "torqueEnabled": torque_active,
+            "torqueRequested": torque_requested,
+            "activeTorqueCount": active_torque_count,
+            "requestedTorqueCount": len(requested_motor_ids),
+            "allTorqueEnabled": active_torque_count == len(JOINTS),
+            "safetyState": safety_state,
+            "initializing": firmware_initializing,
+            "rearmRequired": rearm_required,
             "emergencyStop": emergency_stop,
+            "gains": {"kp": kp, "kd": kd},
             "stateAgeMs": state_age * 1000.0 if math.isfinite(state_age) else None,
             "motors": motors,
             "imu": imu_payload,
@@ -344,6 +591,11 @@ def create_app(client: PochiClient | None = None) -> FastAPI:
                 "motorsConnected": snapshot["connectedCount"],
                 "imuConnected": imu["connected"],
                 "torqueEnabled": snapshot["torqueEnabled"],
+                "activeTorqueCount": snapshot["activeTorqueCount"],
+                "requestedTorqueCount": snapshot["requestedTorqueCount"],
+                "canEnableTorque": snapshot["canEnableTorque"],
+                "safetyState": snapshot["safetyState"],
+                "rearmRequired": snapshot["rearmRequired"],
             }
         )
 

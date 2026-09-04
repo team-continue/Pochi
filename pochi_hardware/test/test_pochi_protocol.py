@@ -15,6 +15,10 @@ from pochi_client.protocol import (
     IMU_STATE_RECORD,
     MOTOR_STATE_RECORD,
     STATE_PACKET_BYTES,
+    STATE_CAN_INITIALIZING,
+    STATE_CAN_READY,
+    STATE_REARM_REQUIRED,
+    STATE_TORQUE_ACTIVE,
     CobsStreamDecoder,
     Header,
     ImuState,
@@ -95,12 +99,20 @@ def test_fixed_packet_sizes_and_command_round_trip() -> None:
 
 
 def test_state_round_trip_includes_all_motors_and_imu() -> None:
-    packet = encode_state(make_state())
+    state = make_state()
+    state.header.flags = (
+        STATE_CAN_INITIALIZING
+        | STATE_CAN_READY
+        | STATE_REARM_REQUIRED
+        | STATE_TORQUE_ACTIVE
+    )
+    packet = encode_state(state)
     decoded = decode_state(packet)
     assert len(packet) == STATE_PACKET_BYTES == 860
     assert [motor.motor_id for motor in decoded.motors] == list(range(12))
     assert decoded.motors[11].position_rad == pytest.approx(1.1)
     assert decoded.imu.quaternion_w == pytest.approx(1.0)
+    assert decoded.header.flags == state.header.flags
 
 
 def test_cobs_and_stream_chunking() -> None:
