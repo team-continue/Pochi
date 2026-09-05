@@ -21,6 +21,14 @@ dependencies = [
   "tyro>=1.0.1",
 ]
 
+[project.optional-dependencies]
+mpc = [
+  "osqp>=1.0,<2",
+  "scipy>=1.11",
+  "mjviser>=0.0.13",
+  "viser>=1.0",
+]
+
 [project.entry-points."mjlab.tasks"]
 pochi_rl = "pochi_rl.mjlab.tasks"
 
