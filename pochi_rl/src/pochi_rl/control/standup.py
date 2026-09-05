@@ -52,7 +52,24 @@ _LEG_SLICES = {
 }
 
 # Which way each knee folds, taken from the stance in pochi_constants so the two
-# stay in sync: the front legs fold backwards, the rear legs forwards.
+# stay in sync.  Physically the front legs fold backwards and the rear legs
+# forwards; that is no longer readable off the signs, because the stance is
+# written in motor coordinates and `MOTOR_SIGN` has already absorbed the
+# mounting direction of each module.
+#
+# Everything below therefore works in motor coordinates while `leg_kinematics`
+# solves in the canonical leg frame, and no conversion is needed between them.
+# That holds on two properties of `MOTOR_SIGN`, not by accident:
+#
+#   * hip pitch and knee always share a sign within a leg, and negating both
+#     leaves `lk.extension` unchanged, so measured extension is frame-agnostic;
+#   * every `lk.inverse` call here asks for a foot straight under the hip
+#     (x=0), where the two elbow branches are exact mirror images, so picking
+#     the branch by the sign already stored in DEFAULT_JOINT_POS returns angles
+#     in that same convention.
+#
+# If a future MOTOR_SIGN ever splits pitch and knee within one leg, both
+# properties break and this needs an explicit canonical<->motor conversion.
 _KNEE_SIGN = {leg: math.copysign(1.0, DEFAULT_JOINT_POS[f"{leg}_knee"]) for leg in LEGS}
 
 # Leg extension at the nominal stance, and hence the constant offset between
@@ -98,15 +115,15 @@ FOLDED_JOINT_POS = _folded_stance()
 # the settled pose overshoot them by a fraction of a milliradian.
 COLLAPSED_BASE_HEIGHT = 0.0633
 COLLAPSED_JOINT_POS = {
-  "FL_hip_roll": 0.700,
-  "FL_hip_pitch": 1.081,
-  "FL_knee": -2.400,
-  "FR_hip_roll": -0.700,
+  "FL_hip_roll": -0.700,
+  "FL_hip_pitch": -1.081,
+  "FL_knee": 2.400,
+  "FR_hip_roll": 0.700,
   "FR_hip_pitch": 1.080,
   "FR_knee": -2.400,
   "RL_hip_roll": 0.700,
-  "RL_hip_pitch": -1.600,
-  "RL_knee": 2.400,
+  "RL_hip_pitch": 1.600,
+  "RL_knee": -2.400,
   "RR_hip_roll": -0.700,
   "RR_hip_pitch": -1.600,
   "RR_knee": 2.400,
@@ -241,4 +258,238 @@ class StandUpController:
       targets[i_knee] = knee
 
     self._t += dt
+    return targets
+
+
+@dataclass(frozen=True)
+class TeleopConfig:
+  """Shape of an on-demand base-height ramp, triggered by e.g. a keypress."""
+
+  crouch_height: float = MIN_CROUCH_HEIGHT
+  stand_height: float = NOMINAL_BASE_HEIGHT
+  hip_roll: float = 0.0
+  transition_duration_s: float = 4.0
+
+  # Same droop correction as StandUpConfig; see its docstring.
+  droop_gain: float = 1.2
+  droop_limit: float = 0.06
+
+
+class TeleopHeightController:
+  """Ramp the base height up or down on command, feet fixed under the hips.
+
+  Standing up and crouching back down are the same move on this robot -- once
+  the hip rolls are closed and the feet are under the hips, the whole stance is
+  one number, the leg extension, and getting to any height in range is just
+  solving :mod:`pochi_rl.control.leg_kinematics` for that number.  So unlike
+  :class:`StandUpController`, which only ever runs that ramp upward once, this
+  drives it in either direction, as many times as asked.
+
+  Expects to be started from that closed stance (what ``StandUpController``'s
+  ``settle``+``approach`` phases produce) -- it has no notion of the folded
+  floor pose and will not get there from it.
+  """
+
+  def __init__(
+    self, cfg: TeleopConfig | None = None, *, start_height: float | None = None
+  ) -> None:
+    self.cfg = cfg or TeleopConfig()
+    height = self.cfg.crouch_height if start_height is None else start_height
+    self._from_height = height
+    self._to_height = height
+    self._t = 0.0
+    self._duration = 1e-6
+    self._droop = {leg: 0.0 for leg in LEGS}
+
+  def command(self, mode: str) -> None:
+    """Start ramping toward ``"stand"`` or ``"crouch"`` from the current height.
+
+    Safe to call again mid-ramp (e.g. the operator changes their mind): it
+    restarts from wherever the base actually is, so there is no jump.
+    """
+    if mode not in ("stand", "crouch"):
+      raise ValueError(f"mode must be 'stand' or 'crouch', got {mode!r}")
+    target = self.cfg.stand_height if mode == "stand" else self.cfg.crouch_height
+    current = self.height
+    if target == self._to_height:
+      return
+    full_range = abs(self.cfg.stand_height - self.cfg.crouch_height)
+    self._from_height = current
+    self._to_height = target
+    self._t = 0.0
+    self._duration = max(
+      abs(target - current) / full_range * self.cfg.transition_duration_s, 1e-6
+    )
+
+  @property
+  def height(self) -> float:
+    """Base height the ramp is asking for right now."""
+    u = _smoothstep(self._t / self._duration)
+    return self._from_height + (self._to_height - self._from_height) * u
+
+  @property
+  def settled(self) -> bool:
+    """Whether the ramp has finished (does not mean the robot has caught up)."""
+    return self._t >= self._duration
+
+  def act(self, joint_pos: np.ndarray, dt: float) -> np.ndarray:
+    """Advance the clock by ``dt``; return 12 targets in JOINT_NAMES order."""
+    q = np.asarray(joint_pos, dtype=float)
+    reach = self.height - FOOT_PAD_OFFSET
+    targets = np.zeros(len(JOINT_NAMES))
+    for leg, (i_roll, i_pitch, i_knee) in _LEG_SLICES.items():
+      measured = lk.extension(q[i_pitch], q[i_knee])
+      self._droop[leg] = float(
+        np.clip(
+          self._droop[leg] + self.cfg.droop_gain * (reach - measured) * dt,
+          -self.cfg.droop_limit,
+          self.cfg.droop_limit,
+        )
+      )
+      hip_pitch, knee = lk.inverse(0.0, -(reach + self._droop[leg]), _KNEE_SIGN[leg])
+      targets[i_roll] = self.cfg.hip_roll
+      targets[i_pitch] = hip_pitch
+      targets[i_knee] = knee
+
+    self._t += dt
+    return targets
+
+
+def _stance_pose(base_height: float, hip_roll: float) -> np.ndarray:
+  """Joint targets, feet under the hips, base at ``base_height``, no droop."""
+  targets = np.zeros(len(JOINT_NAMES))
+  reach = base_height - FOOT_PAD_OFFSET
+  for leg, (i_roll, i_pitch, i_knee) in _LEG_SLICES.items():
+    hip_pitch, knee = lk.inverse(0.0, -reach, _KNEE_SIGN[leg])
+    targets[i_roll] = hip_roll
+    targets[i_pitch] = hip_pitch
+    targets[i_knee] = knee
+  return targets
+
+
+_POSE_STATES = ("down", "crouch", "stand")
+
+
+@dataclass(frozen=True)
+class PoseSequencerConfig:
+  """Shape of the down/crouch/stand ladder and its two ramps."""
+
+  #: Joint targets with the belly on the floor -- typically ``COLLAPSED_JOINT_POS``.
+  down_joint_pos: dict[str, float]
+  crouch_height: float = MIN_CROUCH_HEIGHT
+  stand_height: float = NOMINAL_BASE_HEIGHT
+  hip_roll: float = 0.0
+  crouch_stand_duration_s: float = 4.0
+  down_crouch_duration_s: float = 3.0
+  droop_gain: float = 1.2
+  droop_limit: float = 0.06
+
+
+class PoseSequencer:
+  """Step between ``"down"`` (belly on the floor), ``"crouch"``, and ``"stand"``.
+
+  ``crouch``<->``stand`` is the Cartesian height ramp of
+  :class:`TeleopHeightController`, feet fixed under the hips.  ``down``<->
+  ``crouch`` is a joint-space blend instead: getting the belly off the floor
+  means splaying the hip rolls open, which is not a height the leg IK alone
+  can express.  It is :class:`StandUpController`'s ``approach`` phase, just
+  runnable in either direction.
+
+  Only one ramp is ever live.  A command more than one rung away from the
+  current one is refused (returns a message) rather than skipping the middle
+  rung -- the two mechanisms should never blend into each other -- and
+  re-issuing a reachable command mid-ramp restarts it from wherever the robot
+  actually is, so there is never a jump.
+  """
+
+  def __init__(self, cfg: PoseSequencerConfig, *, start: str = "crouch") -> None:
+    if start not in _POSE_STATES:
+      raise ValueError(f"start must be one of {_POSE_STATES}, got {start!r}")
+    self.cfg = cfg
+    self._crouch_pose = _stance_pose(cfg.crouch_height, cfg.hip_roll)
+    self._down_pose = np.array([cfg.down_joint_pos[n] for n in JOINT_NAMES])
+    self._rung = _POSE_STATES.index(start)
+    self._height = self._fresh_height_controller(
+      start_height=cfg.stand_height if start == "stand" else cfg.crouch_height
+    )
+    self._in_joint_ramp = False
+    self._joint_from = self._crouch_pose.copy()
+    self._joint_to = self._crouch_pose.copy()
+    self._joint_t = 0.0
+    self._joint_duration = 1e-6
+    if start == "down":
+      self._last_targets = self._down_pose.copy()
+    elif start == "crouch":
+      self._last_targets = self._crouch_pose.copy()
+    else:
+      self._last_targets = _stance_pose(cfg.stand_height, cfg.hip_roll)
+
+  def _fresh_height_controller(self, *, start_height: float) -> TeleopHeightController:
+    return TeleopHeightController(
+      TeleopConfig(
+        crouch_height=self.cfg.crouch_height,
+        stand_height=self.cfg.stand_height,
+        hip_roll=self.cfg.hip_roll,
+        transition_duration_s=self.cfg.crouch_stand_duration_s,
+        droop_gain=self.cfg.droop_gain,
+        droop_limit=self.cfg.droop_limit,
+      ),
+      start_height=start_height,
+    )
+
+  @property
+  def state(self) -> str:
+    """The rung being headed toward (not necessarily reached yet)."""
+    return _POSE_STATES[self._rung]
+
+  @property
+  def settled(self) -> bool:
+    """Whether the current ramp has finished (open-loop; not a hardware check)."""
+    if self._in_joint_ramp:
+      return self._joint_t >= self._joint_duration
+    return self._height.settled
+
+  def command(self, state: str) -> str | None:
+    """Head toward ``"down"``, ``"crouch"``, or ``"stand"``.
+
+    Returns an explanatory message if ``state`` is more than one rung away
+    (nothing is sent in that case -- the caller should tell the operator to
+    get to the rung in between first), otherwise ``None``.
+    """
+    if state not in _POSE_STATES:
+      raise ValueError(f"state must be one of {_POSE_STATES}, got {state!r}")
+    target_rung = _POSE_STATES.index(state)
+    if abs(target_rung - self._rung) > 1:
+      via = _POSE_STATES[self._rung + (1 if target_rung > self._rung else -1)]
+      return f"reach {via!r} first"
+    if target_rung == self._rung:
+      return None
+
+    if {self._rung, target_rung} == {0, 1}:
+      self._joint_from = self._last_targets.copy()
+      self._joint_to = self._down_pose if target_rung == 0 else self._crouch_pose
+      self._joint_t = 0.0
+      self._joint_duration = self.cfg.down_crouch_duration_s
+      self._in_joint_ramp = True
+    else:
+      if self._in_joint_ramp:
+        # The joint ramp always lands exactly on `self._crouch_pose`, droop
+        # zero, so a fresh height controller starting there matches with no
+        # jump -- the old one's state is stale from however long ago it was
+        # last driven.
+        self._height = self._fresh_height_controller(start_height=self.cfg.crouch_height)
+      self._in_joint_ramp = False
+      self._height.command("stand" if target_rung == 2 else "crouch")
+    self._rung = target_rung
+    return None
+
+  def act(self, joint_pos: np.ndarray, dt: float) -> np.ndarray:
+    """Advance the clock by ``dt``; return 12 targets in JOINT_NAMES order."""
+    if self._in_joint_ramp:
+      u = _smoothstep(self._joint_t / self._joint_duration)
+      targets = self._joint_from + (self._joint_to - self._joint_from) * u
+      self._joint_t += dt
+    else:
+      targets = self._height.act(joint_pos, dt)
+    self._last_targets = targets
     return targets

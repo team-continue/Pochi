@@ -35,6 +35,7 @@ import trimesh
 from pochi_rl.cad.glb import Glb
 from pochi_rl.robot.pochi_constants import (
   LEGS,
+  MOTOR_SIGN,
   PAYLOAD_DENSITY,
   PAYLOAD_MASS_KG,
   PAYLOAD_POS,
@@ -743,6 +744,20 @@ def _fmt_pos(values) -> str:
   return _fmt(np.round(np.atleast_1d(values).astype(float), 6))
 
 
+def _joint_axis(leg: str, kind: str) -> str:
+  """MJCF ``axis`` for one joint, pointing the way the real motor turns.
+
+  The canonical leg frame puts hip roll on +x and both pitch joints on +y, which
+  is what the CAD gives once ``_signed_axis`` has canonicalised it and what
+  ``leg_kinematics`` solves in.  ``MOTOR_SIGN`` records which of the twelve
+  modules are actually bolted in facing the other way, and negating the axis
+  here is what makes a positive angle in this model mean the same rotation the
+  Teensy reports and accepts for that motor.
+  """
+  sign = "" if MOTOR_SIGN[f"{leg}_{kind}"] > 0 else "-"
+  return f"{sign}1 0 0" if kind == "hip_roll" else f"0 {sign}1 0"
+
+
 def _inertial(props: MassProps, indent: str) -> str:
   eig = np.linalg.eigvalsh(props.inertia)
   if eig.min() <= 0:
@@ -838,22 +853,25 @@ def build_mjcf(
     roll_range = _fmt(JOINT_RANGES["hip_roll"])
     pitch_range = _fmt(JOINT_RANGES["hip_pitch"])
     knee_range = _fmt(JOINT_RANGES["knee"])
+    roll_axis = _joint_axis(leg, "hip_roll")
+    pitch_axis = _joint_axis(leg, "hip_pitch")
+    knee_axis = _joint_axis(leg, "knee")
     bodies.append(f"""
       <body name="{leg}_hip" pos="{_fmt_pos(lm.hip_pos)}">
-        <joint name="{leg}_hip_roll" axis="1 0 0" range="{roll_range}"/>
+        <joint name="{leg}_hip_roll" axis="{roll_axis}" range="{roll_range}"/>
 {_inertial(props["hip"], " " * 8)}
         <geom class="visual" mesh="{leg}_hip"/>
         <geom name="{leg}_hip_collision" class="collision" type="box"
           pos="{_fmt_pos(hip_box_pos)}" size="{_fmt_pos(hip_box_size)}"/>
         <body name="{leg}_thigh" pos="0 0 0">
-          <joint name="{leg}_hip_pitch" axis="0 1 0" range="{pitch_range}"/>
+          <joint name="{leg}_hip_pitch" axis="{pitch_axis}" range="{pitch_range}"/>
 {_inertial(props["thigh"], " " * 10)}
           <geom class="visual" mesh="{leg}_thigh"/>
           <geom name="{leg}_thigh_collision" class="collision" type="capsule"
             fromto="0 {thigh_y:.6g} 0 0 {thigh_y:.6g} {-lm.thigh_length:.6g}"
             size="{thigh_r:.4g}"/>
           <body name="{leg}_shank" pos="0 0 {-lm.thigh_length:.6g}">
-            <joint name="{leg}_knee" axis="0 1 0" range="{knee_range}"/>
+            <joint name="{leg}_knee" axis="{knee_axis}" range="{knee_range}"/>
 {_inertial(props["shank"], " " * 12)}
             <geom class="visual" mesh="{leg}_shank"/>
             <geom name="{leg}_shank_collision" class="collision" type="capsule"

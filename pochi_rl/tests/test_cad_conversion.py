@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from pochi_rl.robot import MOTOR_SIGN
+
 GLB = Path(__file__).resolve().parents[2] / "4leg_assem2.glb"
 
 pytestmark = pytest.mark.skipif(not GLB.exists(), reason="CAD export not available")
@@ -37,7 +39,12 @@ def test_legs_are_symmetric(cad) -> None:
 
 
 def test_forward_kinematics_reproduces_the_cad_pose(cad) -> None:
-  """Driving the generated model to the CAD joint angles must rebuild the CAD."""
+  """Driving the generated model to the CAD joint angles must rebuild the CAD.
+
+  ``cad_angles`` are measured in the canonical CAD frame, while the model's
+  joints turn the way the real motors do, so they are converted on the way in
+  -- the same MOTOR_SIGN the generator applies to the axes.
+  """
   mujoco = pytest.importorskip("mujoco")
   import numpy as np
 
@@ -49,7 +56,7 @@ def test_forward_kinematics_reproduces_the_cad_pose(cad) -> None:
   for leg, lm in model.legs.items():
     for kind, angle in lm.cad_angles.items():
       joint = mujoco.mj_name2id(mj, mujoco.mjtObj.mjOBJ_JOINT, f"{leg}_{kind}")
-      data.qpos[mj.jnt_qposadr[joint]] = angle
+      data.qpos[mj.jnt_qposadr[joint]] = MOTOR_SIGN[f"{leg}_{kind}"] * angle
   mujoco.mj_forward(mj, data)
 
   for leg, lm in model.legs.items():

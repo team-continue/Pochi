@@ -44,14 +44,27 @@ pitch motor, and each `Hippitch_1` carries a knee motor.
 - Leg labels `FL, FR, RL, RR`; joint names `<LEG>_<KIND>` with kind
   `hip_roll`, `hip_pitch`, `knee`. Action order is `JOINT_NAMES` from
   `pochi_rl.robot.pochi_constants`.
-- Sign convention: hip roll positive swings both legs to the robot's left, hip
-  pitch positive swings the thigh backward, knee positive swings the shank
-  backward relative to the thigh.
+- Sign convention: each joint turns the way its real motor turns, so an angle
+  here is the number the Teensy reports and accepts for that motor and nothing
+  converts between simulation and hardware. The modules are fitted in a
+  rotationally symmetric pattern, so the signs come out diagonal (FL matches RR,
+  FR matches RL) rather than mirrored, and `pochi.xml` carries a negated `axis`
+  on six of the twelve joints: `FL_hip_roll`, `FR_hip_roll`, `FL_hip_pitch`,
+  `FL_knee`, `RL_hip_pitch`, `RL_knee`. `MOTOR_SIGN` in
+  `pochi_rl.robot.pochi_constants` is the source of truth and the generator
+  reads it; the hardware side of the same fact is `VIEWER_REVERSED_MOTOR_IDS` in
+  `pochi_hardware/web/app/page.tsx`, verified by driving one joint at a time on
+  the real robot.
+- The *canonical* frame -- hip roll about +x, hip pitch and knee about +y for
+  every leg -- is what the CAD is measured in and what
+  `pochi_rl.control.leg_kinematics` solves in. `MOTOR_SIGN` maps between the two.
 - Zero pose: every leg straight down. The CAD ships with the legs folded flat;
   each link is rotated back about its own joint axis during conversion.
 - Default stance (`DEFAULT_JOINT_POS`) mirrors front and rear, matching how the
-  CAD is assembled: front hip pitch `+0.8` / knee `-1.5`, rear `-0.8` / `+1.5`.
-  That balances the load across the four feet (26.8 N each) and puts the COM
+  CAD is assembled. In motor coordinates that reads `FL -0.8 / +1.5`,
+  `FR +0.8 / -1.5`, `RL +0.8 / -1.5`, `RR -0.8 / +1.5` (hip pitch / knee) --
+  the front/rear mirror is still there, just written through `MOTOR_SIGN`.
+  It balances the load across the four feet (26.8 N each) and puts the COM
   over the base centre; a uniform stance shifts it 41 mm rearward.
 
 ## Geometry (from CAD)

@@ -63,14 +63,14 @@
       <site name="imu" pos="0 0 0" size="0.01" rgba="0 0.4 1 1"/>
 
       <body name="FL_hip" pos="0.2545 0.07 0">
-        <joint name="FL_hip_roll" axis="1 0 0" range="-0.7 0.7"/>
+        <joint name="FL_hip_roll" axis="-1 0 0" range="-0.7 0.7"/>
         <inertial pos="-0.00830334 0.0211765 7.05912e-09" mass="0.516971"
           fullinertia="0.000306708 0.000536387 0.000446575 -2.51638e-05 0 0"/>
         <geom class="visual" mesh="FL_hip"/>
         <geom name="FL_hip_collision" class="collision" type="box"
           pos="-0.011883 0.014013 0" size="0.051117 0.031987 0.03925"/>
         <body name="FL_thigh" pos="0 0 0">
-          <joint name="FL_hip_pitch" axis="0 1 0" range="-1.6 1.6"/>
+          <joint name="FL_hip_pitch" axis="0 -1 0" range="-1.6 1.6"/>
           <inertial pos="5.91198e-08 0.0635964 -0.153348" mass="0.652488"
             fullinertia="0.00376231 0.00385745 0.000334673 1.90614e-07 0 1.15467e-05"/>
           <geom class="visual" mesh="FL_thigh"/>
@@ -78,7 +78,7 @@
             fromto="0 0.0630007 0 0 0.0630007 -0.2"
             size="0.03373"/>
           <body name="FL_shank" pos="0 0 -0.2">
-            <joint name="FL_knee" axis="0 1 0" range="-2.4 2.4"/>
+            <joint name="FL_knee" axis="0 -1 0" range="-2.4 2.4"/>
             <inertial pos="0.00558664 0.0967798 -0.0810399" mass="0.127282"
               fullinertia="0.000799557 0.000813549 2.4104e-05 -8.68651e-07 1.83682e-05 1.25893e-05"/>
             <geom class="visual" mesh="FL_shank"/>
@@ -98,7 +98,7 @@
         </body>
       </body>
       <body name="FR_hip" pos="0.2545 -0.07 0">
-        <joint name="FR_hip_roll" axis="1 0 0" range="-0.7 0.7"/>
+        <joint name="FR_hip_roll" axis="-1 0 0" range="-0.7 0.7"/>
         <inertial pos="-0.00830319 -0.021177 -4.72639e-07" mass="0.516971"
           fullinertia="0.000306709 0.000536389 0.000446577 2.51667e-05 1.50216e-09 0"/>
         <geom class="visual" mesh="FR_hip"/>
@@ -140,7 +140,7 @@
         <geom name="RL_hip_collision" class="collision" type="box"
           pos="0.011883 0.014013 -1e-06" size="0.051117 0.031987 0.03925"/>
         <body name="RL_thigh" pos="0 0 0">
-          <joint name="RL_hip_pitch" axis="0 1 0" range="-1.6 1.6"/>
+          <joint name="RL_hip_pitch" axis="0 -1 0" range="-1.6 1.6"/>
           <inertial pos="6.03251e-08 0.0635933 -0.153349" mass="0.652488"
             fullinertia="0.00376227 0.00385743 0.000334648 1.90348e-07 3.38017e-09 1.18942e-05"/>
           <geom class="visual" mesh="RL_thigh"/>
@@ -148,7 +148,7 @@
             fromto="0 0.0630008 0 0 0.0630008 -0.2"
             size="0.03372"/>
           <body name="RL_shank" pos="0 0 -0.2">
-            <joint name="RL_knee" axis="0 1 0" range="-2.4 2.4"/>
+            <joint name="RL_knee" axis="0 -1 0" range="-2.4 2.4"/>
             <inertial pos="-0.00557406 0.096725 -0.0810409" mass="0.127282"
               fullinertia="0.000799648 0.000813551 2.41813e-05 9.0507e-07 -1.82482e-05 1.31689e-05"/>
             <geom class="visual" mesh="RL_shank"/>

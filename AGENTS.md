@@ -2,11 +2,10 @@
 
 ## Execution host
 
-- Treat this Mac workspace as the source of truth for code edits.
-- Run all hardware-connected commands on the host reached with `ssh pochi`.
-- The remote project directory is `/home/continue/Pochi`.
-- Before building, flashing, testing hardware, or restarting servers, sync the local workspace to the remote directory with `rsync`. Do not use `--delete` unless the user explicitly requests deletion.
-- Exclude generated and machine-local directories from synchronization: `.git/`, `.venv/`, `node_modules/`, `.pio/`, `dist/`, `.vinext/`, and `.next/`.
+- Treat `/home/continue/Pochi` on the Orin host reached with `ssh pochi` as the source of truth for code edits.
+- Edit, build, flash, test hardware, and restart services directly on the Orin host.
+- Do not synchronize the Mac workspace to the Orin host with `rsync` unless the user explicitly requests it.
+- Keep generated and machine-local directories local to each host: `.git/`, `.venv/`, `node_modules/`, `.pio/`, `dist/`, `.vinext/`, and `.next/`.
 
 ## Teensy and services
 

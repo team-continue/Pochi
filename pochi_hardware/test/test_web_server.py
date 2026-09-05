@@ -179,7 +179,7 @@ def test_torque_enable_requires_firmware_ready() -> None:
 
 def test_torque_enable_rejects_a_motor_outside_joint_limits() -> None:
     client = FakeClient()
-    client.state.motors[0].position_rad = 3.0
+    client.state.motors[0].position_rad = 3.2
     service = WebControlService(client)  # type: ignore[arg-type]
 
     assert service.unavailable_motor_ids() == [0]
@@ -194,12 +194,12 @@ def test_gui_target_limits_match_teensy_joint_limits() -> None:
     service.enable_all()
 
     service.set_target(0, math.radians(200.0))
-    service.set_target(1, math.radians(120.0))
-    service.set_target(2, math.radians(-60.0))
+    service.set_target(1, math.radians(200.0))
+    service.set_target(2, math.radians(-200.0))
 
-    assert client.commands[0]["position_rad"] == pytest.approx(3.0 * math.pi / 4.0)
-    assert client.commands[1]["position_rad"] == pytest.approx(math.pi / 2.0)
-    assert client.commands[2]["position_rad"] == pytest.approx(math.radians(-40.0))
+    assert client.commands[0]["position_rad"] == pytest.approx(math.pi)
+    assert client.commands[1]["position_rad"] == pytest.approx(3.0 * math.pi / 4.0)
+    assert client.commands[2]["position_rad"] == pytest.approx(-3.0 * math.pi / 4.0)
 
 
 def test_global_mit_gains_update_enabled_motors() -> None:

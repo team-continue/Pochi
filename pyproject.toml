@@ -5,7 +5,15 @@ description = "USB and UDP tools for the Pochi Teensy hardware controller"
 requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.116",
+  # run_standup_hardware.py and run_walk_hardware.py drive pochi_rl's control
+  # code, which is numpy.
+  "numpy>=2.0.0",
   "pyserial>=3.5",
+  # run_walk_hardware.py runs pochi_rl's learned-policy checkpoints through
+  # torch. CPU only -- the actor is a small MLP, and PyPI's default torch
+  # wheel drags in a full CUDA toolkit that isn't even aarch64-Jetson
+  # compatible; see [tool.uv.sources] below.
+  "torch>=2.13.0",
   "uvicorn[standard]>=0.35",
 ]
 
@@ -20,6 +28,14 @@ dev = [
 
 [tool.uv]
 package = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["pochi_hardware/client/pochi_client"]

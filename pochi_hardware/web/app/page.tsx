@@ -191,9 +191,9 @@ const EMPTY_STATE: RobotState = {
 };
 
 const LIMITS_DEG: Record<string, [number, number]> = {
-  hip: [-40, 90],
-  thigh: [-90, 90],
-  calf: [-135, 135],
+  hip: [-135, 135],
+  thigh: [-135, 135],
+  calf: [-180, 180],
 };
 
 // Motor mounting direction affects only the robot drawing. Encoder numbers and
@@ -775,9 +775,15 @@ export default function Home() {
   };
 
   const armPending = state.requestedTorqueCount > state.activeTorqueCount;
+  const sim2simLabel = process.env.NEXT_PUBLIC_POCHI_SIM2SIM_LABEL;
 
   return (
     <main className="app-shell">
+      {sim2simLabel && (
+        <div className="sim2sim-banner">
+          SIM2SIM — {sim2simLabel} — not real hardware
+        </div>
+      )}
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">P</div>

@@ -157,6 +157,27 @@ button {
   color: #fda4af;
   box-shadow: 0 0 14px rgb(244 63 94 / 12%);
 }
+.sim2sim-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 34px;
+  color: #1c1300;
+  font:
+    800 12px/1 ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: repeating-linear-gradient(
+    135deg,
+    #fbbf24 0 18px,
+    #78350f 18px 36px
+  );
+}
 .top-metric {
   display: inline-flex;
   align-items: center;

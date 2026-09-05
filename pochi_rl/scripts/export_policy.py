@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import torch
+
+from pochi_rl.policy_io import find_actor
+from pochi_rl.task_spec import POCHI_TASK_SPEC
 
 
 class ActorWrapper(torch.nn.Module):
@@ -19,31 +21,13 @@ class ActorWrapper(torch.nn.Module):
     return self.actor(obs)
 
 
-def _find_actor(obj: Any) -> torch.nn.Module:
-  if isinstance(obj, torch.nn.Module):
-    return obj
-  if isinstance(obj, dict):
-    for key in ("actor", "policy", "actor_critic", "model", "student"):
-      value = obj.get(key)
-      if isinstance(value, torch.nn.Module):
-        if hasattr(value, "actor") and isinstance(value.actor, torch.nn.Module):
-          return value.actor
-        return value
-    for value in obj.values():
-      if isinstance(value, torch.nn.Module):
-        return value
-  raise RuntimeError(
-    "Could not find a torch.nn.Module actor in the checkpoint. "
-    "For mjlab/RSL-RL checkpoints, prefer exporting from a loaded runner when "
-    "the exact checkpoint schema changes."
-  )
-
-
 def parse_args() -> argparse.Namespace:
   parser = argparse.ArgumentParser()
   parser.add_argument("--checkpoint", type=Path, required=True)
   parser.add_argument("--output", type=Path, default=Path("exports"))
-  parser.add_argument("--obs-dim", type=int, default=49)
+  parser.add_argument(
+    "--obs-dim", type=int, default=POCHI_TASK_SPEC.observations.policy_dim
+  )
   parser.add_argument("--opset", type=int, default=17)
   return parser.parse_args()
 
@@ -53,7 +37,7 @@ def main() -> int:
   args.output.mkdir(parents=True, exist_ok=True)
 
   checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-  actor = _find_actor(checkpoint).eval()
+  actor = find_actor(checkpoint).eval()
   wrapped = ActorWrapper(actor).eval()
   example = torch.zeros(1, args.obs_dim, dtype=torch.float32)
 

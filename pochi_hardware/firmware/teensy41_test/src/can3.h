@@ -28,16 +28,16 @@ constexpr float CAN3_INITIAL_POSITION_RAD[CAN3_MOTOR_COUNT] = {
 // CAN ID. These limits are enforced even if a host sends a wider target.
 constexpr float CAN3_PI = 3.14159265358979323846f;
 constexpr float CAN3_MIN_POSITION_RAD[CAN3_MOTOR_COUNT] = {
-    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -2.0f * CAN3_PI / 9.0f,
-    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -2.0f * CAN3_PI / 9.0f,
-    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -2.0f * CAN3_PI / 9.0f,
-    -3.0f * CAN3_PI / 4.0f, -CAN3_PI / 2.0f, -2.0f * CAN3_PI / 9.0f,
+    -CAN3_PI, -3.0f * CAN3_PI / 4.0f, -3.0f * CAN3_PI / 4.0f,
+    -CAN3_PI, -3.0f * CAN3_PI / 4.0f, -3.0f * CAN3_PI / 4.0f,
+    -CAN3_PI, -3.0f * CAN3_PI / 4.0f, -3.0f * CAN3_PI / 4.0f,
+    -CAN3_PI, -3.0f * CAN3_PI / 4.0f, -3.0f * CAN3_PI / 4.0f,
 };
 constexpr float CAN3_MAX_POSITION_RAD[CAN3_MOTOR_COUNT] = {
-    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
-    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
-    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
-    3.0f * CAN3_PI / 4.0f, CAN3_PI / 2.0f, CAN3_PI / 2.0f,
+    CAN3_PI, 3.0f * CAN3_PI / 4.0f, 3.0f * CAN3_PI / 4.0f,
+    CAN3_PI, 3.0f * CAN3_PI / 4.0f, 3.0f * CAN3_PI / 4.0f,
+    CAN3_PI, 3.0f * CAN3_PI / 4.0f, 3.0f * CAN3_PI / 4.0f,
+    CAN3_PI, 3.0f * CAN3_PI / 4.0f, 3.0f * CAN3_PI / 4.0f,
 };
 
 enum : uint8_t {
@@ -103,8 +103,8 @@ constexpr uint32_t kConnectionTimeoutUs = 250000;
 constexpr uint32_t kReadyStableUs = 500000;
 constexpr uint32_t kInitializationRetryUs = 1000000;
 constexpr uint32_t kDisabledRefreshUs = 500000;
-constexpr uint32_t kEnableMotorIntervalUs = 500000;
-constexpr uint32_t kEnableRetryUs = 50000;
+constexpr uint32_t kEnableMotorIntervalUs = 100000;
+constexpr uint32_t kEnableRetryUs = 10000;
 constexpr uint32_t kEnableGoalPreloadUs = 10000;
 constexpr uint32_t kPostEnableHoldUs = 100000;
 constexpr uint8_t kEnableMaxAttempts = 20;
@@ -696,7 +696,7 @@ inline void can3_loop() {
     }
 
     // Mechanical position stays observable while torque is off or while a
-    // selected motor waits for the preceding 500 ms enable interval.
+    // selected motor waits for the preceding 100 ms enable interval.
     motors[index].requestParameterNonBlocking(kMechanicalPositionIndex);
     return;
   }

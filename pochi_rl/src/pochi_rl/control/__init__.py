@@ -9,6 +9,11 @@ from pochi_rl.control.standup import (
   StandUpController,
   reference_height,
 )
+from pochi_rl.control.state_estimator import (
+  BodyVelocityEstimator,
+  StateEstimatorConfig,
+  projected_gravity,
+)
 
 __all__ = [
   "COLLAPSED_BASE_HEIGHT",
@@ -18,4 +23,7 @@ __all__ = [
   "StandUpConfig",
   "StandUpController",
   "reference_height",
+  "BodyVelocityEstimator",
+  "StateEstimatorConfig",
+  "projected_gravity",
 ]

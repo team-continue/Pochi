@@ -27,20 +27,55 @@ THIGH_LENGTH = 0.200  # hip pitch axis -> knee axis
 SHANK_LENGTH = 0.225  # knee axis -> foot tip
 FOOT_OFFSET_Y = 0.098  # leg plane -> foot tip, lateral (outboard)
 
+# --- Motor mounting directions ------------------------------------------------
+# Which way each real RS02 is bolted in, as a sign against the *canonical* leg
+# frame (all four legs identical: hip roll about +x, hip pitch and knee about
+# +y, the frame `pochi_rl.control.leg_kinematics` solves in).  The modules are
+# fitted in a rotationally symmetric pattern rather than a mirrored one, so the
+# signs come out diagonal: FL matches RR, FR matches RL.
+#
+# These are the single source of truth for the convention, and the MJCF is
+# generated to match (`pochi_rl.cad.convert` negates the joint axis wherever the
+# sign is -1).  The point is that a joint angle here means the same number the
+# Teensy reports and accepts for that motor, so nothing has to convert between
+# simulation and hardware.
+#
+# Verified on the physical robot by driving one joint at a time; the hardware
+# side of the same fact is `VIEWER_REVERSED_MOTOR_IDS` in
+# `pochi_hardware/web/app/page.tsx`.  If CAD ever disagrees, the robot wins.
+MOTOR_SIGN = {
+  "FL_hip_roll": -1.0,
+  "FL_hip_pitch": -1.0,
+  "FL_knee": -1.0,
+  "FR_hip_roll": -1.0,
+  "FR_hip_pitch": 1.0,
+  "FR_knee": 1.0,
+  "RL_hip_roll": 1.0,
+  "RL_hip_pitch": -1.0,
+  "RL_knee": -1.0,
+  "RR_hip_roll": 1.0,
+  "RR_hip_pitch": 1.0,
+  "RR_knee": 1.0,
+}
+
 # All four legs are kinematically identical, so the stance is a free choice.
 # The front/rear mirrored ("M") layout is how the CAD is assembled and it
 # balances the robot: each foot carries a quarter of the weight and the COM
 # stays over the base centre.  The uniform layout shifts the COM 41 mm back.
+#
+# Written in motor coordinates, so the front/rear mirror is not visible as a
+# sign flip: MOTOR_SIGN already absorbs it, and the diagonal mounting is what
+# makes FL equal RR and FR equal RL below.
 DEFAULT_JOINT_POS = {
   "FL_hip_roll": 0.0,
-  "FL_hip_pitch": 0.8,
-  "FL_knee": -1.5,
+  "FL_hip_pitch": -0.8,
+  "FL_knee": 1.5,
   "FR_hip_roll": 0.0,
   "FR_hip_pitch": 0.8,
   "FR_knee": -1.5,
   "RL_hip_roll": 0.0,
-  "RL_hip_pitch": -0.8,
-  "RL_knee": 1.5,
+  "RL_hip_pitch": 0.8,
+  "RL_knee": -1.5,
   "RR_hip_roll": 0.0,
   "RR_hip_pitch": -0.8,
   "RR_knee": 1.5,

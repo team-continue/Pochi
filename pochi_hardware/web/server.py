@@ -37,9 +37,9 @@ IMU_INITIALIZED = 1 << 0
 IMU_SAMPLE_VALID = 1 << 1
 
 JOINT_LIMITS_RAD = {
-    "hip": (math.radians(-40.0), math.pi / 2.0),
-    "thigh": (-math.pi / 2.0, math.pi / 2.0),
-    "calf": (-3.0 * math.pi / 4.0, 3.0 * math.pi / 4.0),
+    "hip": (-3.0 * math.pi / 4.0, 3.0 * math.pi / 4.0),
+    "thigh": (-3.0 * math.pi / 4.0, 3.0 * math.pi / 4.0),
+    "calf": (-math.pi, math.pi),
 }
 
 
@@ -499,6 +499,12 @@ class WebControlService:
             "quaternionX": None,
             "quaternionY": None,
             "quaternionZ": None,
+            "angularVelocityX": None,
+            "angularVelocityY": None,
+            "angularVelocityZ": None,
+            "accelerationX": None,
+            "accelerationY": None,
+            "accelerationZ": None,
             "ageMs": None,
             "sampleCounter": 0,
             "accuracy": 0,
@@ -523,6 +529,15 @@ class WebControlService:
                 "quaternionX": _finite(quaternion[1]),
                 "quaternionY": _finite(quaternion[2]),
                 "quaternionZ": _finite(quaternion[3]),
+                # Not used by the web UI -- added for run_walk_hardware.py's
+                # state estimator, which needs gyro/accel and not just
+                # orientation.
+                "angularVelocityX": _finite(imu.angular_velocity_x),
+                "angularVelocityY": _finite(imu.angular_velocity_y),
+                "angularVelocityZ": _finite(imu.angular_velocity_z),
+                "accelerationX": _finite(imu.acceleration_x),
+                "accelerationY": _finite(imu.acceleration_y),
+                "accelerationZ": _finite(imu.acceleration_z),
                 "ageMs": None
                 if imu.last_rx_age_us == 0xFFFFFFFF
                 else imu.last_rx_age_us / 1000.0,

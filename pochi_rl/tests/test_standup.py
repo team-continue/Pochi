@@ -55,8 +55,13 @@ def test_default_stance_matches_nominal_height() -> None:
   has to reproduce DEFAULT_JOINT_POS.  The knee comes back exactly; hip pitch is
   a few milliradians off because the CAD stance puts the foot 1.5 mm ahead of
   the hip rather than dead under it.
+
+  The elbow branch is taken from the stance rather than written down, because
+  which sign folds FL's knee is a property of how that motor is mounted
+  (`MOTOR_SIGN`), not a constant of the kinematics.
   """
-  hip_pitch, knee = lk.inverse(0.0, -(NOMINAL_BASE_HEIGHT - FOOT_PAD_OFFSET), -1.0)
+  knee_sign = math.copysign(1.0, DEFAULT_JOINT_POS["FL_knee"])
+  hip_pitch, knee = lk.inverse(0.0, -(NOMINAL_BASE_HEIGHT - FOOT_PAD_OFFSET), knee_sign)
   assert hip_pitch == pytest.approx(DEFAULT_JOINT_POS["FL_hip_pitch"], abs=0.01)
   assert knee == pytest.approx(DEFAULT_JOINT_POS["FL_knee"], abs=1e-6)
 
