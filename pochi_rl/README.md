@@ -64,3 +64,13 @@ uv run python scripts/export_policy.py \
   `forcerange="-30 30"`, and policy deltas scaled by `action_scale=0.25`.
 - Masses, inertias, dimensions, joint limits, and the default crouch are starter
   values and should be replaced with CAD/hardware values before sim-to-real.
+
+## MPC Walking (No Training)
+
+```bash
+uv run --extra mpc python scripts/play_mpc_walk.py --port 8092
+```
+
+Open `http://localhost:8092` for live MuJoCo walking with MPC trajectory and
+contact-force overlays. See [MPC_WALK.md](MPC_WALK.md) for evaluation, controls,
+and the controller's scope.
