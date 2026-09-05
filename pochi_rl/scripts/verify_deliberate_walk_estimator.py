@@ -36,7 +36,7 @@ import torch
 from pochi_rl.control.state_estimator import (
   BodyVelocityEstimator,
   StateEstimatorConfig,
-  projected_gravity,
+  gravity_direction_body,
 )
 from pochi_rl.policy_io import load_actor
 from pochi_rl.robot import DEFAULT_JOINT_POS, JOINT_NAMES, NOMINAL_BASE_HEIGHT
@@ -137,8 +137,15 @@ class Rollout:
 
 
 def build_observation(
-  *, base_lin_vel, base_ang_vel, gravity_body, command, joint_pos, joint_vel,
-  last_action, elapsed_s,
+  *,
+  base_lin_vel,
+  base_ang_vel,
+  gravity_body,
+  command,
+  joint_pos,
+  joint_vel,
+  last_action,
+  elapsed_s,
 ) -> np.ndarray:
   phase = gait_phase(elapsed_s, command)
   return np.concatenate(
@@ -182,8 +189,10 @@ def main() -> int:
   min_height = sim.base_height
   start_xy = sim.data.qpos[0:2].copy()
 
-  print(f"{'t':>6s} {'v_true_x':>9s} {'v_est_x':>9s} {'v_true_y':>9s} "
-        f"{'v_est_y':>9s} {'height':>7s}")
+  print(
+    f"{'t':>6s} {'v_true_x':>9s} {'v_est_x':>9s} {'v_true_y':>9s} "
+    f"{'v_est_y':>9s} {'height':>7s}"
+  )
 
   for tick in range(ticks):
     quat, gyro, accel, true_velocity = sim.imu()
@@ -196,7 +205,7 @@ def main() -> int:
       joint_torque=sim.joint_torque,
       dt=sim.control_dt,
     )
-    g_body = projected_gravity(quat)
+    g_body = gravity_direction_body(quat)
     obs = build_observation(
       base_lin_vel=v_est,
       base_ang_vel=gyro,

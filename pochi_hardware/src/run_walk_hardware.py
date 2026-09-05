@@ -92,7 +92,7 @@ from pochi_rl.control.standup import StandUpConfig, StandUpController
 from pochi_rl.control.state_estimator import (
     BodyVelocityEstimator,
     StateEstimatorConfig,
-    projected_gravity,
+    gravity_direction_body,
 )
 from pochi_rl.policy_io import load_actor
 from pochi_rl.robot import DEFAULT_JOINT_POS, JOINT_NAMES
@@ -304,7 +304,7 @@ async def run_dryrun(link: Link, args: argparse.Namespace) -> int:
         joint_torque=torques,
         dt=1.0 / POCHI_TASK_SPEC.control.policy_hz,
     )
-    g_body = projected_gravity(quaternion)
+    g_body = gravity_direction_body(quaternion)
     command = np.array(WALK_SLOWLY_COMMAND)
     last_action = np.zeros(12)
     obs = build_observation(
@@ -425,7 +425,7 @@ async def _walk_loop(
                     joint_torque=torques,
                     dt=control_dt,
                 )
-                g_body = projected_gravity(quaternion)
+                g_body = gravity_direction_body(quaternion)
                 obs = build_observation(
                     base_lin_vel=v_body,
                     base_ang_vel=gyro,

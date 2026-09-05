@@ -43,9 +43,16 @@ def quat_rotate(q: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 
 def projected_gravity(quaternion_wxyz: np.ndarray) -> np.ndarray:
-  """Gravity in the body frame -- the same quantity the policy's
-  ``projected_gravity`` observation term uses, computed once here and shared
-  with the estimator so the two can never disagree.
+  """True gravitational acceleration, in the body frame -- what the filter's
+  own process model needs (``v_dot = ... + g_body``, a real Newton's-second-law
+  term, so it has to be in m/s^2).
+
+  This is *not* what the policy's ``projected_gravity`` observation wants --
+  mjlab's ``EntityData.gravity_vec_w`` is the unit vector ``[0, 0, -1]``
+  (`mjlab.entity.entity.EntityArticulationInfoCfg` /
+  `Entity.__init__`), not one scaled by 9.81. Feeding this function's output
+  to the policy overstates the tilt signal by 9.81x -- use
+  `gravity_direction_body` for that instead.
 
   ``quaternion_wxyz`` is the IMU's body-to-world orientation, the convention
   both ``ImuState`` and mjlab use.
@@ -54,6 +61,14 @@ def projected_gravity(quaternion_wxyz: np.ndarray) -> np.ndarray:
   return quat_rotate(
     quat_conjugate(np.asarray(quaternion_wxyz, dtype=float)), world_gravity
   )
+
+
+def gravity_direction_body(quaternion_wxyz: np.ndarray) -> np.ndarray:
+  """Unit gravity direction in the body frame -- the actual quantity behind
+  the policy's ``projected_gravity`` observation term. See `projected_gravity`
+  for why that name is reserved for the (differently scaled) physical one the
+  filter needs instead."""
+  return projected_gravity(quaternion_wxyz) / GRAVITY
 
 
 def skew(v: np.ndarray) -> np.ndarray:

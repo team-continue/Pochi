@@ -11,6 +11,7 @@ from pochi_rl.control import leg_kinematics as lk
 from pochi_rl.control.state_estimator import (
   BodyVelocityEstimator,
   StateEstimatorConfig,
+  gravity_direction_body,
   projected_gravity,
   quat_conjugate,
   quat_rotate,
@@ -33,6 +34,23 @@ def test_projected_gravity_matches_a_known_tilt() -> None:
   q = np.array([np.cos(half), np.sin(half), 0.0, 0.0])
   g = projected_gravity(q)
   assert g == pytest.approx([0.0, -GRAVITY, 0.0], abs=1e-9)
+
+
+def test_gravity_direction_body_is_unit_scale_not_9_81() -> None:
+  """Regression test: mjlab's ``projected_gravity`` observation is the unit
+  vector ``[0, 0, -1]`` rotated into the body frame
+  (``EntityData.gravity_vec_w`` in ``mjlab.entity.entity``), not one scaled
+  by ``GRAVITY``. Feeding the policy the 9.81-scaled version overstates the
+  tilt signal by 9.81x and was found to break walking on hardware."""
+  identity = np.array([1.0, 0.0, 0.0, 0.0])
+  g = gravity_direction_body(identity)
+  assert g == pytest.approx([0.0, 0.0, -1.0], abs=1e-9)
+
+  half = np.pi / 4.0
+  tilted = np.array([np.cos(half), np.sin(half), 0.0, 0.0])
+  assert gravity_direction_body(tilted) == pytest.approx(
+    projected_gravity(tilted) / GRAVITY, abs=1e-9
+  )
 
 
 def _default_joint_pos() -> np.ndarray:
