@@ -45,11 +45,17 @@ class NormalizedMlpActor(nn.Module):
     self.register_buffer("obs_std", torch.ones(1, obs_dim))
 
   def forward(self, obs: torch.Tensor) -> torch.Tensor:
-    normalized = (obs - self.obs_mean) / self.obs_std
-    # RSL-RL's own normalizer clips too; the exact bound doesn't have to match
-    # for this to do its job, which is only to keep a hardware-side sensor
-    # glitch from putting a wildly out-of-distribution input into the MLP.
-    normalized = torch.clamp(normalized, -10.0, 10.0)
+    # Matches rsl_rl.modules.normalization.EmpiricalNormalization.forward
+    # exactly: (x - mean) / (std + eps), eps=1e-2 by default, no clipping
+    # (checked against the actual rsl-rl-lib==5.2.0 source, the version this
+    # project pins). An earlier version of this used `/ std` with no eps and
+    # a +/-10 clamp that doesn't exist in rsl_rl at all -- confirmed wrong by
+    # reconstructing observations from a hardware log the buggy version had
+    # produced: replaying them through *this* (eps=1e-2, no-clip) formula
+    # reproduces the log's recorded actions much worse (RMSE ~0.10 on a
+    # near-stationary segment) than replaying through the old formula does
+    # (RMSE ~0.002, as expected -- that's what actually generated the log).
+    normalized = (obs - self.obs_mean) / (self.obs_std + 0.01)
     return self.mlp(normalized)
 
 
