@@ -67,7 +67,13 @@ bounds/step sizes, from ``pochi_rl.mjlab.deliberate_walk``'s
   [u]/[o]  sideways speed +/- 0.005 m/s (trained range -0.025 to 0.025 m/s)
   [j]/[l]  turn rate -/+ 0.01 rad/s     (trained range -0.15 to 0.15 rad/s)
   [g]      "walk slowly" preset: 0.10 m/s forward, no turn (the validated demo)
-  [space]  stop (0, 0, 0)
+  [space]  stop (velocity command back to 0, 0, 0 -- the policy keeps running)
+  [d]      toggle damping mode: kp -> 0, kd -> --damping-kd (2.0 by default).
+           The policy is paused and the watchdog's tracking-error check is
+           skipped while this is on -- the joints go slack except for a
+           viscous damper, deliberately different from [q]/Ctrl-C, which
+           drops torque (and thus all resistance) entirely. Toggling it back
+           off resumes the policy from wherever the robot settled.
   [q]      quit (Ctrl-C also drops torque)
 """
 
@@ -414,6 +420,14 @@ class TickLogger:
         self._file.close()
 
 
+async def _set_gains(link: Link, kp: float, kd: float) -> None:
+    """Change the MIT-mode gains on already-armed motors, live -- the same
+    message ``arm()`` sends before its own enable step, without touching
+    torque-enable state. Used to drop into/out of damping mode (kp=0) inside
+    the walk loop without a disarm/rearm cycle."""
+    await link.send({"type": "gains", "kp": kp, "kd": kd})
+
+
 async def _walk_loop(
     link: Link,
     args: argparse.Namespace,
@@ -434,7 +448,7 @@ async def _walk_loop(
 
     print(
         "[i]/[k] forward +/-   [u]/[o] sideways +/-   [j]/[l] turn +/-\n"
-        "[g] walk slowly (0.10 m/s fwd)   [space] stop   [q] quit"
+        "[g] walk slowly (0.10 m/s fwd)   [space] stop   [d] damping   [q] quit"
     )
     logger = TickLogger(args.log_file) if args.log_file else None
     if logger:
@@ -449,6 +463,7 @@ async def _walk_loop(
     elapsed = 0.0
     next_tick = time.monotonic()
     last_report = 0.0
+    damping = False
     try:
         with _raw_terminal():
             while True:
@@ -456,7 +471,42 @@ async def _walk_loop(
                     key = keys.get_nowait()
                     if key.lower() == "q" or key == "\x03":
                         raise KeyboardInterrupt
+                    if key.lower() == "d":
+                        damping = not damping
+                        if damping:
+                            await _set_gains(link, 0.0, args.damping_kd)
+                            print(
+                                f"\ndamping mode ON (kp=0, kd={args.damping_kd}) "
+                                "-- policy paused, joints free except for damping"
+                            )
+                        else:
+                            snapshot = link.fresh_snapshot()
+                            targets = measured_positions(snapshot, motor_ids)
+                            last_action = np.zeros(12)
+                            await _set_gains(link, args.kp, args.kd)
+                            print(
+                                f"\ndamping mode OFF -- resuming the policy at "
+                                f"kp={args.kp} kd={args.kd} from wherever it settled"
+                            )
+                        continue
                     teleop.handle_key(key.lower() if key != " " else " ")
+
+                if damping:
+                    snapshot = link.fresh_snapshot()
+                    positions = measured_positions(snapshot, motor_ids)
+                    await send_targets(link, motor_ids, positions)
+                    now = time.monotonic()
+                    if now - last_report >= 0.5:
+                        last_report = now
+                        print(f"  t={elapsed:6.2f}s  DAMPING (kp=0)", end="\r")
+                    elapsed += control_dt
+                    next_tick += control_dt
+                    sleep_for = next_tick - time.monotonic()
+                    if sleep_for > 0:
+                        await asyncio.sleep(sleep_for)
+                    else:
+                        next_tick = time.monotonic()
+                    continue
 
                 snapshot = link.fresh_snapshot()
 
@@ -699,6 +749,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--kd", type=float, default=1.5)
     p.add_argument("--max-error-deg", type=float, default=DEFAULT_MAX_ERROR_DEG)
     p.add_argument("--contact-torque-threshold", type=float, default=3.0)
+    p.add_argument(
+        "--damping-kd",
+        type=float,
+        default=2.0,
+        help="walk/standup-walk only: kd used while damping mode ([d]) is on "
+        "(kp forced to 0 -- a viscous damper toward zero joint velocity, not "
+        "a hard stop and not a full disarm)",
+    )
     p.add_argument(
         "--log-file",
         default=None,
