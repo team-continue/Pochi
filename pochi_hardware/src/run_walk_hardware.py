@@ -75,6 +75,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import csv
 import math
 import sys
 import time
@@ -367,6 +368,52 @@ async def run_hold(link: Link, args: argparse.Namespace) -> int:
     return 0
 
 
+class TickLogger:
+    """Per-tick CSV log of the walk loop -- one row per 50 Hz control tick,
+    for diagnosing things a 0.5s status line can't show (a single-tick
+    tracking-error spike, exactly what tripped the watchdog above)."""
+
+    def __init__(self, path: str) -> None:
+        # Held open for the loop's lifetime and closed in its `finally`, not a
+        # `with` block -- the loop calls `.log()` many times before `.close()`.
+        self._file = open(path, "w", newline="")  # noqa: SIM115
+        self._writer = csv.writer(self._file)
+        self._writer.writerow(
+            ["t", "cmd_vx", "cmd_vy", "cmd_wz"]
+            + ["v_est_x", "v_est_y", "v_est_z"]
+            + ["gyro_x", "gyro_y", "gyro_z"]
+            + ["gravity_x", "gravity_y", "gravity_z"]
+            + ["max_tracking_error_deg"]
+            + [f"pos_{name}" for name in JOINT_NAMES]
+            + [f"target_{name}" for name in JOINT_NAMES]
+            + [f"action_{name}" for name in JOINT_NAMES]
+        )
+
+    def log(
+        self,
+        *,
+        elapsed: float,
+        command: np.ndarray,
+        v_body: np.ndarray,
+        gyro: np.ndarray,
+        gravity_body: np.ndarray,
+        positions: np.ndarray,
+        previous_targets: np.ndarray,
+        new_targets: np.ndarray,
+        action: np.ndarray,
+    ) -> None:
+        max_error_deg = float(np.degrees(np.abs(positions - previous_targets)).max())
+        self._writer.writerow(
+            [elapsed, *command, *v_body, *gyro, *gravity_body, max_error_deg]
+            + list(positions)
+            + list(new_targets)
+            + list(action)
+        )
+
+    def close(self) -> None:
+        self._file.close()
+
+
 async def _walk_loop(
     link: Link,
     args: argparse.Namespace,
@@ -389,6 +436,9 @@ async def _walk_loop(
         "[i]/[k] forward +/-   [u]/[o] sideways +/-   [j]/[l] turn +/-\n"
         "[g] walk slowly (0.10 m/s fwd)   [space] stop   [q] quit"
     )
+    logger = TickLogger(args.log_file) if args.log_file else None
+    if logger:
+        print(f"logging every tick to {args.log_file}")
 
     loop = asyncio.get_event_loop()
     keys: asyncio.Queue[str] = asyncio.Queue()
@@ -409,7 +459,6 @@ async def _walk_loop(
                     teleop.handle_key(key.lower() if key != " " else " ")
 
                 snapshot = link.fresh_snapshot()
-                watchdog(snapshot, motor_ids, targets, max_error_rad)
 
                 positions = measured_positions(snapshot, motor_ids)
                 velocities = measured_velocities(snapshot, motor_ids)
@@ -441,9 +490,30 @@ async def _walk_loop(
                         actor(torch.from_numpy(obs).unsqueeze(0)).squeeze(0).numpy()
                     )
                 last_action = action
+                previous_targets = targets
                 targets = (
                     _DEFAULT_JOINT_POS + POCHI_TASK_SPEC.control.action_scale * action
                 )
+
+                if logger:
+                    logger.log(
+                        elapsed=elapsed,
+                        command=teleop.command,
+                        v_body=v_body,
+                        gyro=gyro,
+                        gravity_body=g_body,
+                        positions=positions,
+                        previous_targets=previous_targets,
+                        new_targets=targets,
+                        action=action,
+                    )
+
+                # Checked here, after everything above is already computed
+                # (and logged) for this tick, rather than at the top of the
+                # loop -- the only effect of the ordering is that the tick
+                # that trips it still gets logged, for exactly this kind of
+                # after-the-fact diagnosis.
+                watchdog(snapshot, motor_ids, previous_targets, max_error_rad)
                 await send_targets(link, motor_ids, targets)
 
                 now = time.monotonic()
@@ -473,6 +543,8 @@ async def _walk_loop(
         return 1
     finally:
         loop.remove_reader(sys.stdin.fileno())
+        if logger:
+            logger.close()
 
 
 async def run_walk(link: Link, args: argparse.Namespace) -> int:
@@ -627,6 +699,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--kd", type=float, default=1.5)
     p.add_argument("--max-error-deg", type=float, default=DEFAULT_MAX_ERROR_DEG)
     p.add_argument("--contact-torque-threshold", type=float, default=3.0)
+    p.add_argument(
+        "--log-file",
+        default=None,
+        help="walk/standup-walk only: CSV path, one row per 50 Hz tick "
+        "(command, estimated velocity, gyro, gravity, per-joint position/"
+        "target/action, and the tracking error the watchdog checks)",
+    )
     p.add_argument("--duration", type=float, default=10.0, help="hold mode only")
     # standup-walk mode only -- same defaults/meaning as run_standup_hardware.py.
     p.add_argument(
