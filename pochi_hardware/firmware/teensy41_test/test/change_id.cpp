@@ -20,7 +20,7 @@ constexpr unsigned long kSerialWaitTimeoutMs = 10000;
 static_assert(kOldMotorId >= 1 && kOldMotorId <= 0xFE,
               "OLD motor ID must be in 1..0xFE");
 static_assert(kNewMotorId <= 20,
-              "NEW motor ID must be in the RS03 persistent range 0..20");
+              "NEW motor ID must be in the RS02 persistent range 0..20");
 static_assert(kOldMotorId != kNewMotorId,
               "OLD and NEW motor IDs must differ");
 
@@ -29,11 +29,11 @@ using Motor = RoboStride<CAN3, RX_SIZE_256, TX_SIZE_16>;
 
 CanBus can;
 Motor target(&can, kMasterId, kOldMotorId,
-             static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f);
+             static_cast<int>(ActuatorType::ROBSTRIDE_02), 0.0f);
 Motor old_id_check(&can, kMasterId, kOldMotorId,
-                   static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f);
+                   static_cast<int>(ActuatorType::ROBSTRIDE_02), 0.0f);
 Motor new_id_check(&can, kMasterId, kNewMotorId,
-                   static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f);
+                   static_cast<int>(ActuatorType::ROBSTRIDE_02), 0.0f);
 
 bool finished = false;
 bool passed = false;
@@ -57,7 +57,7 @@ uint8_t scanMotorIds() {
                 static_cast<unsigned long>(kCanBaudRate));
   for (uint16_t id = kFirstScanId; id <= kLastScanId; ++id) {
     Motor candidate(&can, kMasterId, static_cast<uint8_t>(id),
-                    static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f);
+                    static_cast<int>(ActuatorType::ROBSTRIDE_02), 0.0f);
     if (candidate.Probe(kScanProbeTimeoutMs)) {
       ++found_count;
       Serial.printf("  Found motor at ID 0x%02X (%u)\n",
@@ -86,7 +86,7 @@ void setup() {
   delay(250);
 
   Serial.println();
-  Serial.println("RoboStride 03 CAN ID changer (private protocol)");
+  Serial.println("RoboStride 02 CAN ID changer (private protocol)");
   Serial.printf("Requested change: 0x%02X -> 0x%02X\n",
                 kOldMotorId, kNewMotorId);
   Serial.println("WARNING: Connect exactly one target motor to this CAN bus.");

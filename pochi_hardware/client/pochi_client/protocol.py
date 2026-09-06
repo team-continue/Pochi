@@ -8,7 +8,7 @@ import zlib
 from collections.abc import Iterable
 
 MAGIC = b"PCHI"
-VERSION = 1
+VERSION = 2
 MESSAGE_COMMAND = 1
 MESSAGE_STATE = 2
 MOTOR_COUNT = 12
@@ -29,7 +29,7 @@ COMMAND_CLEAR_FAULT = 1 << 1
 
 HEADER = struct.Struct("<4sBBHIQHBB")
 COMMAND_RECORD = struct.Struct("<BBH5f")
-MOTOR_STATE_RECORD = struct.Struct("<BBBBI7fi5fI")
+MOTOR_STATE_RECORD = struct.Struct("<BBHII7fi5fI")
 IMU_STATE_RECORD = struct.Struct("<II4f3f3ffIII")
 CRC = struct.Struct("<I")
 
@@ -40,10 +40,10 @@ STATE_PACKET_BYTES = HEADER.size + STATE_PAYLOAD_BYTES + CRC.size
 
 assert HEADER.size == 24
 assert COMMAND_RECORD.size == 24
-assert MOTOR_STATE_RECORD.size == 64
+assert MOTOR_STATE_RECORD.size == 68
 assert IMU_STATE_RECORD.size == 64
 assert COMMAND_PACKET_BYTES == 316
-assert STATE_PACKET_BYTES == 860
+assert STATE_PACKET_BYTES == 908
 
 
 class ProtocolError(ValueError):
@@ -76,8 +76,8 @@ class MotorCommand:
 class MotorState:
     motor_id: int
     status: int
-    fault_code: int
     flags: int
+    error_code: int
     last_rx_age_us: int
     position_rad: float
     velocity_rad_s: float

@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from pochi_hardware.web.server import MOTOR_CONNECTED, WebControlService
+from pochi_hardware.web.server import MOTOR_CONNECTED, MOTOR_FAULT, WebControlService
 from pochi_client import (
     STATE_CAN_INITIALIZING,
     STATE_CAN_READY,
@@ -28,8 +28,8 @@ class FakeClient:
             MotorState(
                 motor_id=motor_id,
                 status=2,
-                fault_code=0,
                 flags=flags,
+                error_code=0,
                 last_rx_age_us=200,
                 position_rad=motor_id * 0.01,
                 velocity_rad_s=0.1,
@@ -110,6 +110,9 @@ def test_enable_uses_live_pose_then_target_updates_one_joint() -> None:
     assert service.torque_enabled
     assert len(client.commands) == 12
     assert client.commands[0]["position_rad"] == pytest.approx(0.0)
+    assert client.commands[0]["kp"] == pytest.approx(14.0)
+    assert client.commands[0]["kd"] == pytest.approx(0.05)
+    assert service.snapshot()["gains"] == {"kp": 14.0, "kd": 0.05}
 
     service.set_target(0, math.radians(25.0))
     assert client.commands[0]["position_rad"] == pytest.approx(math.radians(25.0))
@@ -119,7 +122,19 @@ def test_enable_uses_live_pose_then_target_updates_one_joint() -> None:
     assert snapshot["motors"][1]["positionRad"] == pytest.approx(0.01)
     assert snapshot["motors"][1]["velocityRadS"] == pytest.approx(0.1)
     assert snapshot["motors"][1]["torqueNm"] == pytest.approx(0.2)
+    assert snapshot["motors"][1]["errorCode"] == 0
     assert json.dumps(snapshot, allow_nan=False)
+
+
+def test_detailed_motor_error_is_exposed_to_the_browser() -> None:
+    client = FakeClient()
+    client.state.motors[3].error_code = (1 << 3) | (1 << 24)
+    client.state.motors[3].flags |= MOTOR_FAULT
+    service = WebControlService(client)  # type: ignore[arg-type]
+
+    motor = service.snapshot()["motors"][3]
+    assert motor["errorCode"] == (1 << 3) | (1 << 24)
+    assert motor["state"] == "ERROR 0x01000008"
 
 
 def test_torque_enable_requires_feedback_from_every_motor() -> None:
@@ -231,7 +246,7 @@ def test_zero_all_targets_updates_every_target_and_enabled_motor() -> None:
 
 @pytest.mark.parametrize(
     ("kp", "kd"),
-    [(-1.0, 1.0), (5001.0, 1.0), (40.0, -0.1), (40.0, 101.0)],
+    [(-1.0, 1.0), (501.0, 1.0), (40.0, -0.1), (40.0, 5.1)],
 )
 def test_global_mit_gains_reject_out_of_range_values(kp: float, kd: float) -> None:
     client = FakeClient()

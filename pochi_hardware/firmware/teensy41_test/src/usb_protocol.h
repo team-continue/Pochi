@@ -9,7 +9,7 @@
 #include "can3.h"
 #include "imu.h"
 
-constexpr uint8_t USB_PROTOCOL_VERSION = 1;
+constexpr uint8_t USB_PROTOCOL_VERSION = 2;
 constexpr uint8_t USB_MESSAGE_COMMAND = 1;
 constexpr uint8_t USB_MESSAGE_STATE = 2;
 constexpr uint16_t USB_FLAG_EMERGENCY_STOP = 1U << 0;
@@ -23,7 +23,7 @@ constexpr uint16_t USB_STATE_TORQUE_ACTIVE = 1U << 6;
 
 constexpr size_t USB_HEADER_BYTES = 24;
 constexpr size_t USB_COMMAND_RECORD_BYTES = 24;
-constexpr size_t USB_MOTOR_STATE_BYTES = 64;
+constexpr size_t USB_MOTOR_STATE_BYTES = 68;
 constexpr size_t USB_IMU_STATE_BYTES = 64;
 constexpr size_t USB_CRC_BYTES = 4;
 constexpr size_t USB_COMMAND_PAYLOAD_BYTES =
@@ -40,7 +40,7 @@ constexpr size_t USB_MAX_ENCODED_BYTES =
 constexpr uint32_t USB_STATE_INTERVAL_US = 5000;
 
 static_assert(USB_COMMAND_PACKET_BYTES == 316, "Unexpected command packet size");
-static_assert(USB_STATE_PACKET_BYTES == 860, "Unexpected state packet size");
+static_assert(USB_STATE_PACKET_BYTES == 908, "Unexpected state packet size");
 
 namespace usb_detail {
 
@@ -258,24 +258,24 @@ inline bool parse_command(const uint8_t *packet, size_t length) {
 inline void write_motor_state(size_t &offset, const Can3MotorTelemetry &state) {
   transmit_decoded[offset] = state.motor_id;
   transmit_decoded[offset + 1] = state.status;
-  transmit_decoded[offset + 2] = state.fault_code;
-  transmit_decoded[offset + 3] = state.flags;
-  write_u32(transmit_decoded, offset + 4, state.last_rx_age_us);
-  write_float(transmit_decoded, offset + 8, state.position_rad);
-  write_float(transmit_decoded, offset + 12, state.velocity_rad_s);
-  write_float(transmit_decoded, offset + 16, state.torque_nm);
-  write_float(transmit_decoded, offset + 20, state.temp_mos_c);
-  write_float(transmit_decoded, offset + 24, state.temp_rotor_c);
-  write_float(transmit_decoded, offset + 28, state.bus_voltage_v);
-  write_float(transmit_decoded, offset + 32, state.iq_current_a);
-  write_u32(transmit_decoded, offset + 36,
+  write_u16(transmit_decoded, offset + 2, state.flags);
+  write_u32(transmit_decoded, offset + 4, state.error_code);
+  write_u32(transmit_decoded, offset + 8, state.last_rx_age_us);
+  write_float(transmit_decoded, offset + 12, state.position_rad);
+  write_float(transmit_decoded, offset + 16, state.velocity_rad_s);
+  write_float(transmit_decoded, offset + 20, state.torque_nm);
+  write_float(transmit_decoded, offset + 24, state.temp_mos_c);
+  write_float(transmit_decoded, offset + 28, state.temp_rotor_c);
+  write_float(transmit_decoded, offset + 32, state.bus_voltage_v);
+  write_float(transmit_decoded, offset + 36, state.iq_current_a);
+  write_u32(transmit_decoded, offset + 40,
             static_cast<uint32_t>(state.rotation_count));
-  write_float(transmit_decoded, offset + 40, state.command_position_rad);
-  write_float(transmit_decoded, offset + 44, state.command_velocity_rad_s);
-  write_float(transmit_decoded, offset + 48, state.command_kp);
-  write_float(transmit_decoded, offset + 52, state.command_kd);
-  write_float(transmit_decoded, offset + 56, state.command_torque_nm);
-  write_u32(transmit_decoded, offset + 60, state.command_sequence);
+  write_float(transmit_decoded, offset + 44, state.command_position_rad);
+  write_float(transmit_decoded, offset + 48, state.command_velocity_rad_s);
+  write_float(transmit_decoded, offset + 52, state.command_kp);
+  write_float(transmit_decoded, offset + 56, state.command_kd);
+  write_float(transmit_decoded, offset + 60, state.command_torque_nm);
+  write_u32(transmit_decoded, offset + 64, state.command_sequence);
   offset += USB_MOTOR_STATE_BYTES;
 }
 

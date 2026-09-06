@@ -36,8 +36,8 @@ def fake_state(sequence: int, command_sequence: int) -> StatePacket:
         MotorState(
             motor_id=motor_id,
             status=2,
-            fault_code=0,
             flags=0x27,
+            error_code=0,
             last_rx_age_us=100,
             position_rad=motor_id * 0.01,
             velocity_rad_s=0.0,

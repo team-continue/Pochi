@@ -61,7 +61,7 @@ void setup() {
   uint8_t responding_id_count = 0;
   for (uint16_t id = kFirstScanId; id <= kLastScanId; ++id) {
     Motor candidate(&can, kMasterId, static_cast<uint8_t>(id),
-                    static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f);
+                    static_cast<int>(ActuatorType::ROBSTRIDE_02), 0.0f);
     if (!candidate.Probe(kScanProbeTimeoutMs)) {
       continue;
     }
@@ -86,7 +86,7 @@ void setup() {
 
     const uint8_t id = static_cast<uint8_t>(kFirstExpectedId + index);
     Motor candidate(&can, kMasterId, id,
-                    static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f);
+                    static_cast<int>(ActuatorType::ROBSTRIDE_02), 0.0f);
     Serial.printf("  Retrying expected ID 0x%02X...\n",
                   static_cast<unsigned int>(id));
     if (candidate.Probe(kExpectedIdRetryTimeoutMs)) {
@@ -123,7 +123,7 @@ void loop() {
     uint8_t live_found_count = 0;
     for (uint8_t id = kFirstExpectedId; id <= kLastExpectedId; ++id) {
       Motor candidate(&can, kMasterId, id,
-                      static_cast<int>(ActuatorType::ROBSTRIDE_03), 0.0f);
+                      static_cast<int>(ActuatorType::ROBSTRIDE_02), 0.0f);
       const bool found = candidate.Probe(kExpectedIdRetryTimeoutMs);
       live_found_count += found ? 1 : 0;
       Serial.printf("  ID 0x%02X: %s\n", static_cast<unsigned int>(id),

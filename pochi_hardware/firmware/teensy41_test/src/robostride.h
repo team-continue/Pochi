@@ -33,8 +33,8 @@
 
 #define SC_MAX 23.0f
 #define SC_MIN 0.0f
-#define SV_MAX 20.0f
-#define SV_MIN -20.0f
+#define SV_MAX 44.0f
+#define SV_MIN -44.0f
 #define SCIQ_MIN -23.0f
 
 // 通信地址
@@ -136,13 +136,13 @@ struct data_read_write{
 };
 
 static const std::map<ActuatorType, ActuatorOperation> ACTUATOR_OPERATION_MAPPING = {
-    { ActuatorType::ROBSTRIDE_00, { 4 * M_PI, 50, 17,   500.0,  5.0   } },
+    { ActuatorType::ROBSTRIDE_00, { 4 * M_PI, 33, 14,   500.0,  5.0   } },
     { ActuatorType::ROBSTRIDE_01, { 4 * M_PI, 44, 17,   500.0,  5.0   } },
     { ActuatorType::ROBSTRIDE_02, { 4 * M_PI, 44, 17,   500.0,  5.0   } },
     { ActuatorType::ROBSTRIDE_03, { 4 * M_PI, 20, 60,  5000.0, 100.0  } },
     { ActuatorType::ROBSTRIDE_04, { 4 * M_PI, 15, 120, 5000.0, 100.0  } },
-    { ActuatorType::ROBSTRIDE_05, { 4 * M_PI, 33, 17,   500.0,  5.0   } },
-    { ActuatorType::ROBSTRIDE_06, { 4 * M_PI, 20, 60,  5000.0, 100.0  } },
+    { ActuatorType::ROBSTRIDE_05, { 4 * M_PI, 50, 5.5,  500.0,  5.0   } },
+    { ActuatorType::ROBSTRIDE_06, { 4 * M_PI, 50, 36,  5000.0, 100.0  } },
 };
 
 FCTP_CLASS class RoboStride : public MotorBase {
@@ -166,6 +166,7 @@ FCTP_CLASS class RoboStride : public MotorBase {
     data_read_write_one params_;
 
     uint8_t error_code_ = 0;
+    uint32_t detailed_error_code_ = 0;
     uint8_t pattern_ = 0;
 
     Motor_Set Motor_Set_All_ = {0};
@@ -191,6 +192,29 @@ FCTP_CLASS class RoboStride : public MotorBase {
     ReconnectStep reconnect_step_ = RECONNECT_IDLE;
     unsigned long reconnect_step_started_ms_ = 0;
     unsigned long reconnect_retry_started_ms_ = 0;
+
+    static uint32_t readLittleEndianU32(const uint8_t *data) {
+        return static_cast<uint32_t>(data[0]) |
+               (static_cast<uint32_t>(data[1]) << 8U) |
+               (static_cast<uint32_t>(data[2]) << 16U) |
+               (static_cast<uint32_t>(data[3]) << 24U);
+    }
+
+    // Normalized 32-bit diagnostic layout sent to the host:
+    //   bits 0..23  = Type-21 fault bits in their documented positions
+    //   bits 24..31 = Type-21 warning bits 0..7
+    // Type-2 has two useful summary faults that Type-21 does not name. Keep
+    // them in otherwise-unused bits 17 and 18 so diagnostics are never lost.
+    static uint32_t expandCompactFaultCode(uint8_t code) {
+        uint32_t expanded = 0;
+        expanded |= (code & (1U << 0)) != 0U ? (1UL << 2) : 0U;   // undervoltage
+        expanded |= (code & (1U << 1)) != 0U ? (1UL << 17) : 0U;  // generic overcurrent
+        expanded |= (code & (1U << 2)) != 0U ? (1UL << 0) : 0U;   // overtemperature
+        expanded |= (code & (1U << 3)) != 0U ? (1UL << 18) : 0U;  // magnetic encoder
+        expanded |= (code & (1U << 4)) != 0U ? (1UL << 14) : 0U;  // stall/overload
+        expanded |= (code & (1U << 5)) != 0U ? (1UL << 7) : 0U;   // uncalibrated
+        return expanded;
+    }
 
 public:
     MotorState &feedback;
@@ -739,6 +763,11 @@ private:
         }
 
         if (result.communication_type == Communication_Type_ErrorFeedback) {
+            const uint32_t fault_value = readLittleEndianU32(result.data);
+            const uint32_t warning_value = readLittleEndianU32(result.data + 4);
+            detailed_error_code_ =
+                (fault_value & 0x00FFFFFFUL) |
+                ((warning_value & 0xFFUL) << 24U);
             return true;
         }
 
@@ -868,6 +897,10 @@ private:
 
         if(can_->write(w_msg) != 1)
             return false;
+        if (clear_error != 0U) {
+            error_code_ = 0;
+            detailed_error_code_ = 0;
+        }
         if(!wait_response) {
             return true;
         }
@@ -1037,8 +1070,14 @@ public:
         return Disenable_Motor(clear_error ? 1U : 0U, false);
     }
 
-    uint8_t faultCode() const {
-        return error_code_;
+    uint32_t errorCode() const {
+        return detailed_error_code_ | expandCompactFaultCode(error_code_);
+    }
+
+    bool hasFault() const {
+        // The upper byte contains warnings; warnings remain visible but do not
+        // inhibit torque by themselves.
+        return error_code_ != 0U || (detailed_error_code_ & 0x00FFFFFFUL) != 0U;
     }
 
     uint8_t statusPattern() const {
@@ -1139,8 +1178,8 @@ public:
     }
 
     bool Set_CAN_ID(uint8_t new_can_id, unsigned long timeout_ms = 100){
-        // RS03 stores CAN_ID in parameter 0x2009, whose documented persistent
-        // range is 0..20.
+        // RoboStride's private protocol stores CAN_ID in parameter 0x2009;
+        // the documented persistent range used here is 0..20.
         if (new_can_id > 20 || new_can_id == master_id_) {
             return false;
         }

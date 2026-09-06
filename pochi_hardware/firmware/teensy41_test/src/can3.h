@@ -12,6 +12,8 @@
 constexpr uint8_t CAN3_FIRST_MOTOR_ID = 0;
 constexpr size_t CAN3_MOTOR_COUNT = 12;
 constexpr uint32_t CAN3_COMMAND_TIMEOUT_MS = 50;
+constexpr float CAN3_DEFAULT_KP = 14.0f;
+constexpr float CAN3_DEFAULT_KD = 0.05f;
 
 // Load-side absolute encoder positions at the robot's reference pose, indexed
 // directly by CAN ID 0..11. Edit this one array when recalibrating the pose.
@@ -67,16 +69,16 @@ struct Can3MitCommand {
   uint16_t flags = 0;
   float position_rad = 0.0f;
   float velocity_rad_s = 0.0f;
-  float kp = 0.0f;
-  float kd = 0.0f;
+  float kp = CAN3_DEFAULT_KP;
+  float kd = CAN3_DEFAULT_KD;
   float torque_nm = 0.0f;
 };
 
 struct Can3MotorTelemetry {
   uint8_t motor_id = 0;
   uint8_t status = 0;
-  uint8_t fault_code = 0;
   uint8_t flags = 0;
+  uint32_t error_code = 0;
   uint32_t last_rx_age_us = UINT32_MAX;
   float position_rad = NAN;
   float velocity_rad_s = NAN;
@@ -88,8 +90,8 @@ struct Can3MotorTelemetry {
   int32_t rotation_count = INT32_MIN;
   float command_position_rad = 0.0f;
   float command_velocity_rad_s = 0.0f;
-  float command_kp = 0.0f;
-  float command_kd = 0.0f;
+  float command_kp = CAN3_DEFAULT_KP;
+  float command_kd = CAN3_DEFAULT_KD;
   float command_torque_nm = 0.0f;
   uint32_t command_sequence = 0;
 };
@@ -115,28 +117,30 @@ constexpr uint8_t kMotorModeRun = 2;
 constexpr uint8_t kMotorModeUnknown = 0xFF;
 constexpr uint16_t kAllMotorMask =
     static_cast<uint16_t>((1U << CAN3_MOTOR_COUNT) - 1U);
-constexpr float kVelocityLimitRadS = 50.0f;
-constexpr float kTorqueLimitNm = 60.0f;
-constexpr float kKpLimit = 5000.0f;
-constexpr float kKdLimit = 100.0f;
+// RoboStride 02 private-protocol MIT field ranges. These must match the
+// actuator type used below or commands and feedback will be scaled wrongly.
+constexpr float kVelocityLimitRadS = 44.0f;
+constexpr float kTorqueLimitNm = 17.0f;
+constexpr float kKpLimit = 500.0f;
+constexpr float kKdLimit = 5.0f;
 
 using CanBus = FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16>;
 using Motor = RoboStride<CAN3, RX_SIZE_256, TX_SIZE_16>;
 
 inline CanBus bus;
 inline Motor motors[CAN3_MOTOR_COUNT] = {
-    Motor(&bus, kMasterId, 0x00, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[0]),
-    Motor(&bus, kMasterId, 0x01, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[1]),
-    Motor(&bus, kMasterId, 0x02, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[2]),
-    Motor(&bus, kMasterId, 0x03, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[3]),
-    Motor(&bus, kMasterId, 0x04, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[4]),
-    Motor(&bus, kMasterId, 0x05, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[5]),
-    Motor(&bus, kMasterId, 0x06, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[6]),
-    Motor(&bus, kMasterId, 0x07, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[7]),
-    Motor(&bus, kMasterId, 0x08, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[8]),
-    Motor(&bus, kMasterId, 0x09, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[9]),
-    Motor(&bus, kMasterId, 0x0A, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[10]),
-    Motor(&bus, kMasterId, 0x0B, static_cast<int>(ActuatorType::ROBSTRIDE_03), CAN3_INITIAL_POSITION_RAD[11]),
+    Motor(&bus, kMasterId, 0x00, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[0]),
+    Motor(&bus, kMasterId, 0x01, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[1]),
+    Motor(&bus, kMasterId, 0x02, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[2]),
+    Motor(&bus, kMasterId, 0x03, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[3]),
+    Motor(&bus, kMasterId, 0x04, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[4]),
+    Motor(&bus, kMasterId, 0x05, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[5]),
+    Motor(&bus, kMasterId, 0x06, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[6]),
+    Motor(&bus, kMasterId, 0x07, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[7]),
+    Motor(&bus, kMasterId, 0x08, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[8]),
+    Motor(&bus, kMasterId, 0x09, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[9]),
+    Motor(&bus, kMasterId, 0x0A, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[10]),
+    Motor(&bus, kMasterId, 0x0B, static_cast<int>(ActuatorType::ROBSTRIDE_02), CAN3_INITIAL_POSITION_RAD[11]),
 };
 
 inline Can3MitCommand commands[CAN3_MOTOR_COUNT] = {};
@@ -206,7 +210,7 @@ inline bool motors_connected(uint16_t mask, uint32_t now_us) {
     if ((mask & static_cast<uint16_t>(1U << i)) != 0U &&
         (!initialized[i] || !encoder_valid[i] ||
         static_cast<uint32_t>(now_us - last_rx_us[i]) > kConnectionTimeoutUs ||
-         motors[i].faultCode() != 0U)) {
+         motors[i].hasFault())) {
       return false;
     }
   }
@@ -822,14 +826,14 @@ inline bool can3_get_telemetry(size_t index, Can3MotorTelemetry &telemetry) {
   telemetry = {};
   telemetry.motor_id = static_cast<uint8_t>(CAN3_FIRST_MOTOR_ID + index);
   telemetry.status = reported_mode_status[index];
-  telemetry.fault_code = motor.faultCode();
+  telemetry.error_code = motor.errorCode();
   telemetry.flags =
       (initialized[index] ? CAN3_STATE_INITIALIZED : 0U) |
       (connected ? CAN3_STATE_CONNECTED : 0U) |
       (encoder_valid[index] ? CAN3_STATE_FEEDBACK_VALID : 0U) |
       (effective_enabled[index] ? CAN3_STATE_ENABLE_REQUESTED : 0U) |
       (command_alive() ? CAN3_STATE_COMMAND_ALIVE : 0U) |
-      (motor.faultCode() != 0U ? CAN3_STATE_FAULT : 0U) |
+      (motor.hasFault() ? CAN3_STATE_FAULT : 0U) |
       (arm_granted &&
                (armed_enable_mask & static_cast<uint16_t>(1U << index)) != 0U &&
                !enable_confirmed[index]

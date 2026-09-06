@@ -7,7 +7,7 @@ safety architecture wholesale: commands go over the *existing*
 reporting, torque-off-on-disconnect, the operator's browser stays live with
 its E-STOP), and the same staged ``--mode`` progression applies.
 
-Two things make this riskier than the stand-up script and shape everything
+Three things make this riskier than the stand-up script and shape everything
 below:
 
 1. This checkpoint was trained against the *full-torque, full-speed* RS02
@@ -23,6 +23,13 @@ below:
    no-slip assumption. Its contact detection is a torque threshold (no F/T
    sensors exist) and its accuracy has not been checked against anything but
    simulated data -- see ``pochi_rl/tests/test_state_estimator.py``.
+3. The checkpoint does not speak the robot's joint coordinates.  It was
+   trained before 9c1f1d3, back when the MJCF used the canonical leg frame;
+   since that commit a joint angle in the model *is* the angle the Teensy
+   reports, which negates six of the twelve.  ``--policy-joint-frame`` picks
+   which, and it defaults to the older frame because that is what every
+   checkpoint in ``pochi_rl/checkpoints/`` was trained in.  See
+   ``_CANONICAL_SIGN`` below.
 
 Modes, in the order they should be run on a robot that has never done this:
 
@@ -63,7 +70,9 @@ Keyboard, in ``walk`` mode (matches the sim playback viewer's own GUI
 bounds/step sizes, from ``pochi_rl.mjlab.deliberate_walk``'s
 ``DeliberateVelocityCommand.create_gui``):
 
-  [i]/[k]  forward speed +/- 0.01 m/s   (trained range 0.00 to 0.14 m/s)
+  [i]/[k]  forward speed +/- 0.01 m/s   (trained range 0.00 to 0.14 m/s;
+                                         -0.14 to 0.14 with --omni, for a
+                                         checkpoint trained to walk backward too)
   [u]/[o]  sideways speed +/- 0.005 m/s (trained range -0.025 to 0.025 m/s)
   [j]/[l]  turn rate -/+ 0.01 rad/s     (trained range -0.15 to 0.15 rad/s)
   [g]      "walk slowly" preset: 0.10 m/s forward, no turn (the validated demo)
@@ -82,6 +91,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import hashlib
+import json
 import math
 import sys
 import time
@@ -102,7 +113,7 @@ from pochi_rl.control.state_estimator import (
     gravity_direction_body,
 )
 from pochi_rl.policy_io import load_actor
-from pochi_rl.robot import DEFAULT_JOINT_POS, JOINT_NAMES
+from pochi_rl.robot import DEFAULT_JOINT_POS, JOINT_NAMES, MOTOR_SIGN
 from pochi_rl.task_spec import POCHI_TASK_SPEC
 from run_standup_hardware import (
     Link,
@@ -144,6 +155,73 @@ DEFAULT_MAX_ERROR_DEG = 25.0
 STANCE_TOLERANCE_DEG = 15.0
 
 _DEFAULT_JOINT_POS = np.array([DEFAULT_JOINT_POS[name] for name in JOINT_NAMES])
+
+# --- The checkpoint's joint frame is not the robot's --------------------------
+# Every checkpoint that exists today was trained before 9c1f1d3, the commit
+# that made a joint angle in the MJCF *be* the angle the Teensy reports for
+# that motor: it negated the joint axis of the six joints whose RS02 is bolted
+# in backwards (`MOTOR_SIGN == -1`) and negated `DEFAULT_JOINT_POS` to match.
+# Before it the model used the canonical leg frame -- all four legs about
+# +x/+y, with the front/rear stance mirror spelled out in the defaults instead.
+# `Pochi-Deliberate-Walk-v0` lives on origin/feature/deliberate-walk, which
+# branches from 32d6ea3, i.e. from before that change.
+#
+# The two frames describe the same physical poses and differ by exactly
+# `MOTOR_SIGN`, which is -1 on six joints:
+#
+#     FL_hip_roll  FL_hip_pitch  FL_knee  FR_hip_roll  RL_hip_pitch  RL_knee
+#
+#     q_canonical = MOTOR_SIGN * q_motor       (joint velocities the same way)
+#     q_motor     = MOTOR_SIGN * q_canonical
+#
+# The two DEFAULT_JOINT_POS transform the same way, so the observation's
+# *relative* joint position needs one multiply and no re-referencing:
+#
+#     (q - q0)_canonical = MOTOR_SIGN * (q - q0)_motor
+#
+# and an action, being a delta on the default stance, converts the same way on
+# its way back out.
+#
+# Two things deliberately do *not* get the sign:
+#
+#   * `last_action`, which goes back into the observation exactly as the policy
+#     emitted it -- it is the network's own output, not a joint angle.
+#   * the state estimator, which takes motor-frame angles and applies
+#     `MOTOR_SIGN` itself before the leg kinematics, and returns a body
+#     velocity, which has no joint frame at all.
+#
+# Running the wrong frame is not a subtle degradation -- six of the twelve
+# joints move the wrong way -- but it does not necessarily look violent, and
+# walk_log2.csv is what it looks like: an upright robot with clean joint
+# tracking, moving its legs, and an estimated forward velocity of zero.
+_CANONICAL_SIGN = np.array([MOTOR_SIGN[name] for name in JOINT_NAMES])
+_IDENTITY_SIGN = np.ones(len(JOINT_NAMES))
+
+
+def frame_sign(policy_joint_frame: str) -> np.ndarray:
+    """Motor frame -> the checkpoint's joint frame, per joint.  See above."""
+    return _CANONICAL_SIGN if policy_joint_frame == "canonical" else _IDENTITY_SIGN
+
+
+def joint_targets(action: np.ndarray, sign: np.ndarray) -> np.ndarray:
+    """Motor-frame position targets from a policy action.  The action is a
+    delta on the default stance in the *policy's* frame, so it is the delta
+    that gets the sign, not the sum."""
+    return _DEFAULT_JOINT_POS + POCHI_TASK_SPEC.control.action_scale * (sign * action)
+
+
+# What each slice of the 50-dim observation is, for the log's sidecar -- an
+# offline replay needs this to take the vector apart again.
+OBS_LAYOUT = (
+    ("base_lin_vel", 3),
+    ("base_ang_vel", 3),
+    ("projected_gravity", 3),
+    ("velocity_commands", 3),
+    ("joint_pos_rel", 12),
+    ("joint_vel", 12),
+    ("last_action", 12),
+    ("gait_phase", GAIT_PHASE_DIM),
+)
 
 
 def imu_reading(snapshot: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -230,11 +308,15 @@ def build_observation(
     joint_vel: np.ndarray,
     last_action: np.ndarray,
     elapsed_s: float,
+    sign: np.ndarray,
 ) -> np.ndarray:
     """The 50-dim actor input, in exactly the order the training env built it:
     base_lin_vel, base_ang_vel, projected_gravity, velocity_commands,
-    joint_pos_rel, joint_vel_rel, last_action, gait_phase."""
-    joint_pos_rel = joint_pos - _DEFAULT_JOINT_POS
+    joint_pos_rel, joint_vel_rel, last_action, gait_phase.
+
+    ``joint_pos``/``joint_vel`` arrive in motor coordinates; ``sign`` carries
+    them into the frame the checkpoint was trained in (see ``frame_sign``)."""
+    joint_pos_rel = sign * (joint_pos - _DEFAULT_JOINT_POS)
     phase = gait_phase(elapsed_s, command)
     return np.concatenate(
         [
@@ -243,7 +325,7 @@ def build_observation(
             gravity_body,
             command,
             joint_pos_rel,
-            joint_vel,
+            sign * joint_vel,
             last_action,
             phase,
         ]
@@ -254,8 +336,11 @@ class Teleop:
     """Live (vx, vy, wz) command, nudged by keypresses. See the module
     docstring for the key legend; bounds/steps match the sim playback GUI."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, vx_range: tuple[float, float] = COMMAND_RANGES["vx"]) -> None:
         self.command = np.zeros(3)
+        # Only vx varies by checkpoint (forward-only vs. --omni's symmetric
+        # range) -- vy and wz are already symmetric and shared by all of them.
+        self.ranges = {**COMMAND_RANGES, "vx": vx_range}
 
     def handle_key(self, key: str) -> None:
         if key == "i":
@@ -277,7 +362,7 @@ class Teleop:
 
     def _nudge(self, axis: str, delta: float) -> None:
         index = {"vx": 0, "vy": 1, "wz": 2}[axis]
-        low, high = COMMAND_RANGES[axis]
+        low, high = self.ranges[axis]
         self.command[index] = min(max(self.command[index] + delta, low), high)
 
 
@@ -314,6 +399,7 @@ async def run_dryrun(link: Link, args: argparse.Namespace) -> int:
     g_body = gravity_direction_body(quaternion)
     command = np.array(WALK_SLOWLY_COMMAND)
     last_action = np.zeros(12)
+    sign = frame_sign(args.policy_joint_frame)
     obs = build_observation(
         base_lin_vel=v_body,
         base_ang_vel=gyro,
@@ -323,11 +409,17 @@ async def run_dryrun(link: Link, args: argparse.Namespace) -> int:
         joint_vel=velocities,
         last_action=last_action,
         elapsed_s=0.0,
+        sign=sign,
     )
     with torch.inference_mode():
         action = actor(torch.from_numpy(obs).unsqueeze(0)).squeeze(0).numpy()
-    targets = _DEFAULT_JOINT_POS + POCHI_TASK_SPEC.control.action_scale * action
+    targets = joint_targets(action, sign)
 
+    print(f"checkpoint:             {args.checkpoint}")
+    print(
+        f"policy joint frame:     {args.policy_joint_frame} "
+        f"(sign {' '.join(f'{value:+.0f}' for value in sign)})"
+    )
     print(f"estimated base_lin_vel: {v_body}")
     print(f"projected_gravity:      {g_body}")
     print(f"observation ({obs.shape[0]} dims): {obs}")
@@ -374,47 +466,100 @@ async def run_hold(link: Link, args: argparse.Namespace) -> int:
     return 0
 
 
+def run_metadata(args: argparse.Namespace, sign: np.ndarray) -> dict:
+    """Everything an offline replay of the log needs and cannot recover from
+    the rows: which network produced the actions, in which joint frame, under
+    which gains, against which stance."""
+    checkpoint = Path(args.checkpoint)
+    digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    return {
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": digest,
+        "policy_joint_frame": args.policy_joint_frame,
+        "omni": bool(args.omni),
+        "vx_range": [-0.14, 0.14] if args.omni else list(COMMAND_RANGES["vx"]),
+        "joint_sign": [float(value) for value in sign],
+        "joint_names": list(JOINT_NAMES),
+        "default_joint_pos_motor_frame": [float(q) for q in _DEFAULT_JOINT_POS],
+        "action_scale": float(POCHI_TASK_SPEC.control.action_scale),
+        "policy_hz": float(POCHI_TASK_SPEC.control.policy_hz),
+        "obs_layout": [{"name": name, "dim": dim} for name, dim in OBS_LAYOUT],
+        "kp": float(args.kp),
+        "kd": float(args.kd),
+        "damping_kd": float(args.damping_kd),
+        "max_error_deg": float(args.max_error_deg),
+        "contact_torque_threshold": float(args.contact_torque_threshold),
+        "gait_period_s": GAIT_PERIOD_S,
+        "started_unix": time.time(),
+    }
+
+
 class TickLogger:
     """Per-tick CSV log of the walk loop -- one row per 50 Hz control tick,
     for diagnosing things a 0.5s status line can't show (a single-tick
     tracking-error spike, exactly what tripped the watchdog above)."""
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, *, metadata: dict) -> None:
+        # Everything that is constant for the run goes in a sidecar rather than
+        # into every row: which checkpoint, which joint frame, which gains.
+        # A log that does not say those cannot be replayed offline, which is
+        # the whole point of having it.
+        Path(path).with_suffix(".meta.json").write_text(
+            json.dumps(metadata, indent=2, sort_keys=True) + "\n"
+        )
         # Held open for the loop's lifetime and closed in its `finally`, not a
         # `with` block -- the loop calls `.log()` many times before `.close()`.
         self._file = open(path, "w", newline="")  # noqa: SIM115
         self._writer = csv.writer(self._file)
         self._writer.writerow(
-            ["t", "cmd_vx", "cmd_vy", "cmd_wz"]
+            ["t", "wall_clock", "mode", "cmd_vx", "cmd_vy", "cmd_wz"]
             + ["v_est_x", "v_est_y", "v_est_z"]
             + ["gyro_x", "gyro_y", "gyro_z"]
             + ["gravity_x", "gravity_y", "gravity_z"]
             + ["max_tracking_error_deg"]
             + [f"pos_{name}" for name in JOINT_NAMES]
+            + [f"vel_{name}" for name in JOINT_NAMES]
+            + [f"torque_{name}" for name in JOINT_NAMES]
             + [f"target_{name}" for name in JOINT_NAMES]
             + [f"action_{name}" for name in JOINT_NAMES]
+            + [f"obs_{index}" for index in range(OBS_DIM)]
         )
 
     def log(
         self,
         *,
         elapsed: float,
+        mode: str,
         command: np.ndarray,
         v_body: np.ndarray,
         gyro: np.ndarray,
         gravity_body: np.ndarray,
         positions: np.ndarray,
+        velocities: np.ndarray,
+        torques: np.ndarray,
         previous_targets: np.ndarray,
         new_targets: np.ndarray,
-        action: np.ndarray,
+        action: np.ndarray | None,
+        obs: np.ndarray | None,
     ) -> None:
+        """One row per tick, including damping ticks -- a gap in `t` used to be
+        the only trace those left, which made a log impossible to line up with
+        wall-clock events.  `action`/`obs` are None on those (no policy ran);
+        the columns stay, empty."""
         max_error_deg = float(np.degrees(np.abs(positions - previous_targets)).max())
         self._writer.writerow(
-            [elapsed, *command, *v_body, *gyro, *gravity_body, max_error_deg]
+            [elapsed, time.time(), mode, *command, *v_body, *gyro, *gravity_body]
+            + [max_error_deg]
             + list(positions)
+            + list(velocities)
+            + list(torques)
             + list(new_targets)
-            + list(action)
+            + (list(action) if action is not None else [""] * len(JOINT_NAMES))
+            + (list(obs) if obs is not None else [""] * OBS_DIM)
         )
+        # Flushed every tick: the runs worth reading are the ones that end in
+        # an abort, and a half-written buffer loses exactly the last seconds.
+        self._file.flush()
 
     def close(self) -> None:
         self._file.close()
@@ -442,15 +587,26 @@ async def _walk_loop(
     estimator = BodyVelocityEstimator(
         StateEstimatorConfig(contact_torque_threshold_nm=args.contact_torque_threshold)
     )
-    teleop = Teleop()
+    vx_range = (-0.14, 0.14) if args.omni else COMMAND_RANGES["vx"]
+    teleop = Teleop(vx_range=vx_range)
     control_dt = 1.0 / POCHI_TASK_SPEC.control.policy_hz
     max_error_rad = math.radians(args.max_error_deg)
+    sign = frame_sign(args.policy_joint_frame)
 
+    print(
+        f"policy joint frame: {args.policy_joint_frame} "
+        f"(sign {' '.join(f'{value:+.0f}' for value in sign)})"
+    )
+    print(f"vx range: {vx_range[0]:+.2f} to {vx_range[1]:+.2f} m/s")
     print(
         "[i]/[k] forward +/-   [u]/[o] sideways +/-   [j]/[l] turn +/-\n"
         "[g] walk slowly (0.10 m/s fwd)   [space] stop   [d] damping   [q] quit"
     )
-    logger = TickLogger(args.log_file) if args.log_file else None
+    logger = (
+        TickLogger(args.log_file, metadata=run_metadata(args, sign))
+        if args.log_file
+        else None
+    )
     if logger:
         print(f"logging every tick to {args.log_file}")
 
@@ -495,6 +651,32 @@ async def _walk_loop(
                     snapshot = link.fresh_snapshot()
                     positions = measured_positions(snapshot, motor_ids)
                     await send_targets(link, motor_ids, positions)
+                    targets = positions
+                    if logger:
+                        # Damping mode is the fallback the operator reaches
+                        # for when something is already wrong, so logging it
+                        # must not be able to abort it: a dead IMU here costs
+                        # three columns, not the robot's torque.
+                        try:
+                            quaternion, gyro, _ = imu_reading(snapshot)
+                            gravity = gravity_direction_body(quaternion)
+                        except RuntimeError:
+                            gyro = gravity = np.full(3, np.nan)
+                        logger.log(
+                            elapsed=elapsed,
+                            mode="damping",
+                            command=teleop.command,
+                            v_body=np.zeros(3),
+                            gyro=gyro,
+                            gravity_body=gravity,
+                            positions=positions,
+                            velocities=measured_velocities(snapshot, motor_ids),
+                            torques=measured_torques(snapshot, motor_ids),
+                            previous_targets=positions,
+                            new_targets=positions,
+                            action=None,
+                            obs=None,
+                        )
                     now = time.monotonic()
                     if now - last_report >= 0.5:
                         last_report = now
@@ -534,6 +716,7 @@ async def _walk_loop(
                     joint_vel=velocities,
                     last_action=last_action,
                     elapsed_s=elapsed,
+                    sign=sign,
                 )
                 with torch.inference_mode():
                     action = (
@@ -541,21 +724,23 @@ async def _walk_loop(
                     )
                 last_action = action
                 previous_targets = targets
-                targets = (
-                    _DEFAULT_JOINT_POS + POCHI_TASK_SPEC.control.action_scale * action
-                )
+                targets = joint_targets(action, sign)
 
                 if logger:
                     logger.log(
                         elapsed=elapsed,
+                        mode="walk",
                         command=teleop.command,
                         v_body=v_body,
                         gyro=gyro,
                         gravity_body=g_body,
                         positions=positions,
+                        velocities=velocities,
+                        torques=torques,
                         previous_targets=previous_targets,
                         new_targets=targets,
                         action=action,
+                        obs=obs,
                     )
 
                 # Checked here, after everything above is already computed
@@ -741,12 +926,30 @@ def parse_args() -> argparse.Namespace:
             / "pochi_deliberate_walk_model_950.pt"
         ),
     )
-    # Matches POCHI_ACTUATOR's training-time stiffness/damping
-    # (pochi_rl.mjlab.entity_cfg) -- the policy was trained assuming joints
-    # track this closely, so start here rather than the stand-up script's
-    # much softer 40/1.0.
-    p.add_argument("--kp", type=float, default=60.0)
-    p.add_argument("--kd", type=float, default=1.5)
+    p.add_argument(
+        "--omni",
+        action="store_true",
+        help="checkpoint was trained with a symmetric vx range "
+        "(-0.14 to 0.14 m/s) and can walk backward -- default is the "
+        "forward-only range (0.00 to 0.14) every non-omni checkpoint in "
+        "pochi_rl/checkpoints/ was trained on. vy/wz ranges are unaffected: "
+        "both are already symmetric and shared by every checkpoint.",
+    )
+    p.add_argument(
+        "--policy-joint-frame",
+        choices=("canonical", "motor"),
+        default="canonical",
+        help="which joint frame the checkpoint speaks. 'canonical' for one "
+        "trained before 9c1f1d3 -- which is every checkpoint in "
+        "pochi_rl/checkpoints/, and the default; 'motor' for one retrained "
+        "since, whose joint angles are already the ones the Teensy reports. "
+        "Getting this wrong inverts six of the twelve joints and the robot "
+        "will not walk (see _CANONICAL_SIGN)",
+    )
+    # Conservative hardware defaults shared with the Teensy and web UI.
+    # Explicit --kp/--kd options can still be used for controlled tuning.
+    p.add_argument("--kp", type=float, default=14.0)
+    p.add_argument("--kd", type=float, default=0.05)
     p.add_argument("--max-error-deg", type=float, default=DEFAULT_MAX_ERROR_DEG)
     p.add_argument("--contact-torque-threshold", type=float, default=3.0)
     p.add_argument(
@@ -762,7 +965,9 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="walk/standup-walk only: CSV path, one row per 50 Hz tick "
         "(command, estimated velocity, gyro, gravity, per-joint position/"
-        "target/action, and the tracking error the watchdog checks)",
+        "velocity/torque/target/action, the full 50-dim observation, and the "
+        "tracking error the watchdog checks). A <name>.meta.json sidecar gets "
+        "the checkpoint, its hash, the joint frame and the gains",
     )
     p.add_argument("--duration", type=float, default=10.0, help="hold mode only")
     # standup-walk mode only -- same defaults/meaning as run_standup_hardware.py.

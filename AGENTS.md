@@ -14,5 +14,5 @@
 - Keep torque off while deploying, flashing, reconnecting, or restarting services.
 - The remote user services are `pochi-teensy-bridge.service`, `pochi-web-api.service`, and `pochi-web-ui.service`.
 - After deployment, restart those services and verify `http://127.0.0.1:8765/health` on the remote host reports 12 motors and the IMU before enabling torque.
-- Access the remote GUI through an SSH tunnel forwarding local ports 3000 and 8765 to the same remote ports. Do not expose the torque-control API directly to the LAN.
+- Bind the Web GUI and torque-control API to `0.0.0.0` so trusted LAN hosts can access ports 3000 and 8765 directly. Do not expose either port to the public Internet.
 

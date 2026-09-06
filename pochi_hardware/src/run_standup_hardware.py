@@ -208,9 +208,10 @@ def check_ready(snapshot: dict, motor_ids: list[int]) -> list[str]:
         if motor["positionRad"] is None:
             problems.append(f"CAN {motor_id} ({motor['name']}) has no CAN feedback")
             continue
-        if motor["faultCode"]:
+        if motor["errorCode"]:
             problems.append(
-                f"CAN {motor_id} ({motor['name']}) reports fault {motor['faultCode']}"
+                f"CAN {motor_id} ({motor['name']}) reports error "
+                f"0x{motor['errorCode']:08X}"
             )
         if not motor["canEnableTorque"]:
             problems.append(
@@ -270,7 +271,7 @@ def watchdog(
     by_id = {motor["id"]: motor for motor in snapshot["motors"]}
     for i, motor_id in enumerate(motor_ids):
         motor = by_id[motor_id]
-        if motor["faultCode"]:
+        if motor["errorCode"]:
             raise RuntimeError(
                 f"CAN {motor_id} ({motor['name']}) faulted: {motor['state']}"
             )
@@ -306,7 +307,7 @@ async def arm(link: Link, kp: float, kd: float) -> None:
             snapshot = link.fresh_snapshot()
             active = int(snapshot["activeTorqueCount"])
             if active == 12:
-                print(f"torque on, 12/12 motors, kp={kp:.0f} kd={kd:.1f}")
+                print(f"torque on, 12/12 motors, kp={kp:g} kd={kd:g}")
                 return
             await asyncio.sleep(0.05)
     except Exception:
@@ -529,7 +530,7 @@ async def run_jog(link: Link, args: argparse.Namespace) -> int:
                 snapshot = link.fresh_snapshot()
                 by_id = {motor["id"]: motor for motor in snapshot["motors"]}
                 position = by_id[motor_id]["positionRad"]
-                if position is None or by_id[motor_id]["faultCode"]:
+                if position is None or by_id[motor_id]["errorCode"]:
                     raise RuntimeError(f"CAN {motor_id} lost feedback or faulted")
                 error = abs(float(position) - target)
                 if error > max_error_rad:
@@ -702,8 +703,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--yes", action="store_true", help="required for anything that moves"
     )
-    p.add_argument("--kp", type=float, default=40.0)
-    p.add_argument("--kd", type=float, default=1.0)
+    p.add_argument("--kp", type=float, default=14.0)
+    p.add_argument("--kd", type=float, default=0.05)
     p.add_argument("--max-error-deg", type=float, default=DEFAULT_MAX_ERROR_DEG)
     p.add_argument("--allow-clamp", action="store_true")
     p.add_argument("--duration", type=float, default=10.0, help="hold mode only")

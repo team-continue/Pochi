@@ -51,9 +51,9 @@ def _motor_mode_text(status: int) -> str:
     return {0: "RESET", 1: "CALIBRATION", 2: "RUN"}.get(status, "UNKNOWN")
 
 
-def _motor_state_text(flags: int, fault_code: int, status: int) -> str:
+def _motor_state_text(flags: int, error_code: int, status: int) -> str:
     if flags & MOTOR_FAULT:
-        return f"FAULT {fault_code}"
+        return f"ERROR 0x{error_code:08X}"
     if flags & MOTOR_ENABLE_PENDING:
         return f"ENABLE PENDING ({_motor_mode_text(status)})"
     if flags & MOTOR_ENABLE_REQUESTED:
@@ -79,7 +79,7 @@ def _quaternion_to_rpy_deg(w: float, x: float, y: float, z: float) -> tuple[floa
 class WebControlService:
     """Own the browser control state and keep torque off until explicit opt-in."""
 
-    def __init__(self, client: PochiClient, *, kp: float = 40.0, kd: float = 1.0) -> None:
+    def __init__(self, client: PochiClient, *, kp: float = 14.0, kd: float = 0.05) -> None:
         self.client = client
         self.kp = kp
         self.kd = kd
@@ -235,10 +235,10 @@ class WebControlService:
                 )
 
     def set_gains(self, kp: float, kd: float) -> None:
-        if not math.isfinite(kp) or not 0.0 <= kp <= 5000.0:
-            raise ValueError("gains.kp must be finite and between 0 and 5000")
-        if not math.isfinite(kd) or not 0.0 <= kd <= 100.0:
-            raise ValueError("gains.kd must be finite and between 0 and 100")
+        if not math.isfinite(kp) or not 0.0 <= kp <= 500.0:
+            raise ValueError("gains.kp must be finite and between 0 and 500")
+        if not math.isfinite(kd) or not 0.0 <= kd <= 5.0:
+            raise ValueError("gains.kd must be finite and between 0 and 5")
 
         with self._lock:
             self.kp = kp
@@ -436,7 +436,7 @@ class WebControlService:
                         "ageMs": None,
                         "status": None,
                         "flags": 0,
-                        "faultCode": 0,
+                        "errorCode": 0,
                         "state": "NO DATA",
                         "torqueRequested": joint.motor_id in requested_motor_ids,
                         "torqueEnabled": False,
@@ -480,9 +480,9 @@ class WebControlService:
                     else motor.last_rx_age_us / 1000.0,
                     "status": motor.status,
                     "flags": motor.flags,
-                    "faultCode": motor.fault_code,
+                    "errorCode": motor.error_code,
                     "state": _motor_state_text(
-                        motor.flags, motor.fault_code, motor.status
+                        motor.flags, motor.error_code, motor.status
                     ),
                     "torqueRequested": joint.motor_id in requested_motor_ids,
                     "torqueEnabled": motor_torque_enabled,

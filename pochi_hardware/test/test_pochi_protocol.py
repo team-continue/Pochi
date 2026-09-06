@@ -41,8 +41,8 @@ def make_state() -> StatePacket:
         MotorState(
             motor_id=motor_id,
             status=2,
-            fault_code=0,
             flags=0x27,
+            error_code=(1 << 3) | (1 << 24),
             last_rx_age_us=100 + motor_id,
             position_rad=motor_id * 0.1,
             velocity_rad_s=motor_id * 0.2,
@@ -108,9 +108,10 @@ def test_state_round_trip_includes_all_motors_and_imu() -> None:
     )
     packet = encode_state(state)
     decoded = decode_state(packet)
-    assert len(packet) == STATE_PACKET_BYTES == 860
+    assert len(packet) == STATE_PACKET_BYTES == 908
     assert [motor.motor_id for motor in decoded.motors] == list(range(12))
     assert decoded.motors[11].position_rad == pytest.approx(1.1)
+    assert decoded.motors[11].error_code == (1 << 3) | (1 << 24)
     assert decoded.imu.quaternion_w == pytest.approx(1.0)
     assert decoded.header.flags == state.header.flags
 

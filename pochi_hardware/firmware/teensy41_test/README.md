@@ -1,9 +1,9 @@
 # Teensy 4.1 PlatformIO test
 
-Teensy 4.1のPlatformIO環境とCAN3上のRoboStride 03を確認するためのプロジェクトです。
+Teensy 4.1のPlatformIO環境とCAN3上のRoboStride 02を確認するためのプロジェクトです。
 
 - CAN3: Classic CAN、1 Mbps
-- RoboStride 03: CAN ID 0〜11
+- RoboStride 02: CAN ID 0〜11
 - マスターID: `0xFD`
 - 制御方式: MIT control
 - 起動時の既定状態: 全モーター停止
@@ -41,7 +41,7 @@ Teensy 4.1をUSBで接続して実行します。自動書き込みが始まら�
 
 ## Change a RoboStride CAN ID
 
-`test/change_id.cpp` is a one-shot ID changer for one RS03 using the private
+`test/change_id.cpp` is a one-shot ID changer for one RS02 using the private
 29-bit CAN protocol. Edit `kOldMotorId` and `kNewMotorId`, temporarily use the
 file as `src/main.cpp`, then build and upload it. Connect exactly one target
 motor while changing an ID.
@@ -99,7 +99,7 @@ Joint targets are converted back to the raw MIT coordinate using the `2pi`
 equivalent angle nearest to the latest raw encoder reading. A plain
 `offset + joint` conversion can cross the absolute-encoder wrap and request a
 position one full revolution away while still appearing numerically valid in
-the RS03 `[-4pi, 4pi]` MIT range.
+the RS02 `[-4pi, 4pi]` MIT range.
 
 ```bash
 cd ~/Documents/GitHub/Pochi
@@ -119,11 +119,16 @@ uv run python pochi_hardware/src/teensy_udp_bridge.py \
 ## Protocol
 
 - Python → Teensy: 12台分のMIT指令を1個の316-byte packetで送信
-- Teensy → Python: 12台分の状態とIMUを1個の860-byte packetで返信
+- Teensy → Python: 12台分の状態とIMUを1個の908-byte packetで返信
 - USB上ではCOBS encode後に`0x00`を付加
 - UDP上ではCOBSを外したpacketを1 datagramとして送受信
 - 指令が50 ms途絶えると全モーターを停止
 - CRC、sequence、motor ID、有限値を検査してから12台分を一括更新
+
+State packet protocol v2は、各モーターに32-bitの`error_code`を含みます。
+bits 0〜23はType 21 faultのビット位置を維持し、bits 24〜31はType 21
+warningの下位8ビットです。Type 2だけで報告される三相過電流と磁気
+encoder faultは、それぞれbit 17とbit 18へ補完します。
 
 IMUはcore2025 upperと同じICM-20948を使用し、SPI1のMOSI 26、MISO 39、SCK 27、CS 38へ接続します。
 

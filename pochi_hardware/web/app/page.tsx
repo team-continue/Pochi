@@ -49,7 +49,7 @@ type MotorState = {
   ageMs: number | null;
   status: number | null;
   flags: number;
-  faultCode: number;
+  errorCode: number;
   state: string;
   torqueRequested: boolean;
   torqueEnabled: boolean;
@@ -135,7 +135,7 @@ const EMPTY_MOTORS: MotorState[] = JOINTS.map(
     ageMs: null,
     status: null,
     flags: 0,
-    faultCode: 0,
+    errorCode: 0,
     state: 'NO DATA',
     torqueRequested: false,
     torqueEnabled: false,
@@ -174,8 +174,8 @@ const EMPTY_STATE: RobotState = {
   rearmRequired: true,
   emergencyStop: false,
   gains: {
-    kp: 40,
-    kd: 1,
+    kp: 14,
+    kd: 0.05,
   },
   stateAgeMs: null,
   motors: EMPTY_MOTORS,
@@ -232,8 +232,38 @@ function torqueText(value: number | null): string {
   return `${rounded > 0 ? '+' : ''}${rounded.toFixed(2)}`;
 }
 
-function faultCodeText(code: number): string {
-  return `0x${code.toString(16).toUpperCase().padStart(2, '0')}`;
+const ERROR_BITS: ReadonlyArray<readonly [number, string, boolean]> = [
+  [0, 'Motor overtemperature', false],
+  [1, 'Driver IC fault', false],
+  [2, 'Undervoltage', false],
+  [3, 'Overvoltage', false],
+  [4, 'B-phase overcurrent', false],
+  [5, 'C-phase overcurrent', false],
+  [7, 'Encoder uncalibrated', false],
+  [8, 'Hardware ID fault', false],
+  [9, 'Position initialization fault', false],
+  [14, 'Stall / overload', false],
+  [16, 'A-phase overcurrent', false],
+  [17, 'Three-phase overcurrent', false],
+  [18, 'Magnetic encoder fault', false],
+  [24, 'Motor temperature high', true],
+];
+
+function errorCodeText(code: number): string {
+  const active = ERROR_BITS.filter(
+    ([bit]) => Math.floor(code / 2 ** bit) % 2 === 1,
+  );
+  const faults = active
+    .filter(([, , warning]) => !warning)
+    .map(([, label]) => label);
+  const warnings = active
+    .filter(([, , warning]) => warning)
+    .map(([, label]) => label);
+  const parts: string[] = [];
+  if (faults.length) parts.push(`Error: ${faults.join(', ')}`);
+  if (warnings.length) parts.push(`Warning: ${warnings.join(', ')}`);
+  if (!parts.length) parts.push('Error: Unknown');
+  return `${parts.join(' / ')} (0x${code.toString(16).toUpperCase().padStart(8, '0')})`;
 }
 
 function useRobotSocket() {
@@ -368,8 +398,9 @@ function TorqueIndicator({
     new Vector3(0, 1, 0),
     tangent.normalize(),
   );
-  const magnitude = torque === null ? 0 : Math.min(Math.abs(torque) / 20, 1);
-  const labelTone = motor.faultCode
+  // RS02 peak torque is 17 Nm; fill the arc at the actuator's real limit.
+  const magnitude = torque === null ? 0 : Math.min(Math.abs(torque) / 17, 1);
+  const labelTone = motor.errorCode
     ? 'fault'
     : direction > 0
       ? 'positive'
@@ -436,7 +467,7 @@ function JointNode({
   const online =
     motor.positionRad !== null &&
     (motor.state === 'ENCODER LIVE' || motor.state === 'MIT ENABLED');
-  const color = motor.faultCode
+  const color = motor.errorCode
     ? '#fb7185'
     : selected
       ? '#38bdf8'
@@ -723,12 +754,12 @@ export default function Home() {
   const hardwareLive = connection === 'connected' && state.connected;
   const allMotorsLive =
     hardwareLive && state.connectedCount === state.expectedCount;
-  const faultedMotors = state.motors.filter((motor) => motor.faultCode !== 0);
+  const faultedMotors = state.motors.filter((motor) => motor.errorCode !== 0);
   const faultSummary = !hardwareLive
     ? 'NO DATA'
     : faultedMotors.length
       ? faultedMotors
-          .map((motor) => `ID ${motor.id} ${faultCodeText(motor.faultCode)}`)
+          .map((motor) => `ID ${motor.id} ${errorCodeText(motor.errorCode)}`)
           .join(' · ')
       : 'NONE';
   const limits = LIMITS_DEG[selected.joint] ?? [-180, 180];
@@ -765,9 +796,9 @@ export default function Home() {
       !Number.isFinite(parsedKp) ||
       !Number.isFinite(parsedKd) ||
       parsedKp < 0 ||
-      parsedKp > 5000 ||
+      parsedKp > 500 ||
       parsedKd < 0 ||
-      parsedKd > 100
+      parsedKd > 5
     )
       return;
     send({ type: 'gains', kp: parsedKp, kd: parsedKd });
@@ -951,7 +982,7 @@ export default function Home() {
                   ref={gainKpInput}
                   type="number"
                   min="0"
-                  max="5000"
+                  max="500"
                   step="1"
                   defaultValue={state.gains.kp}
                   required
@@ -965,8 +996,8 @@ export default function Home() {
                   ref={gainKdInput}
                   type="number"
                   min="0"
-                  max="100"
-                  step="0.1"
+                  max="5"
+                  step="0.01"
                   defaultValue={state.gains.kd}
                   required
                   onChange={() => setGainsDirty(true)}
@@ -1059,7 +1090,7 @@ export default function Home() {
                     <strong>{numberText(motor.positionDeg, 1)}°</strong>
                     <i
                       className={
-                        motor.faultCode
+                        motor.errorCode
                           ? 'fault'
                           : motor.state === 'ENCODER LIVE' ||
                               motor.state === 'MIT RUN'
@@ -1133,10 +1164,10 @@ export default function Home() {
               value={`${numberText(selected.torqueNm, 2)} Nm`}
             />
             <Metric
-              label="Fault"
+              label="Error"
               value={
-                selected.faultCode
-                  ? faultCodeText(selected.faultCode)
+                selected.errorCode
+                  ? errorCodeText(selected.errorCode)
                   : hardwareLive
                     ? 'None'
                     : 'No data'
@@ -1161,7 +1192,7 @@ export default function Home() {
             <div>
               <span
                 className={
-                  selected.faultCode
+                  selected.errorCode
                     ? 'state-dot fault'
                     : selected.state === 'ENCODER LIVE' ||
                         selected.state === 'MIT RUN'
