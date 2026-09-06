@@ -1,4 +1,4 @@
-"""Planar two-link kinematics for one Pochi leg.
+"""Analytic planar and three-dimensional kinematics for one Pochi leg.
 
 All four legs are geometrically identical (see ``assets/pochi/pochi.xml``): the
 hip roll axis is +x, the hip pitch and knee axes are +y, the thigh runs
@@ -7,9 +7,9 @@ from the knee.  With hip roll at zero the leg therefore stays in the x-z plane
 and reduces to a textbook two-link arm, which is all the stand-up controller
 needs.
 
-Positions here are the *foot* relative to the *hip*, in the base frame, and
-ignore the constant outboard y offset of the foot (``FOOT_OFFSET_Y``): it is the
-same for every pose and so cancels out of the controller.
+Positions are the *foot* relative to the *hip*. The planar functions ignore
+the outboard foot offset; ``forward_3d`` and ``inverse_3d`` include its rotation
+about the hip roll axis, using a signed ``offset_y`` for the left/right legs.
 """
 
 from __future__ import annotations
@@ -63,3 +63,27 @@ def inverse(x: float, z: float, knee_sign: float) -> tuple[float, float]:
     L2 * math.sin(knee), L1 + L2 * math.cos(knee)
   )
   return hip_pitch, knee
+
+
+def forward_3d(
+  hip_roll: float, hip_pitch: float, knee: float, offset_y: float
+) -> tuple[float, float, float]:
+  """Foot relative to hip, including the signed outboard foot offset."""
+  x, z = forward(hip_pitch, knee)
+  c, s = math.cos(hip_roll), math.sin(hip_roll)
+  return x, c * offset_y - s * z, s * offset_y + c * z
+
+
+def inverse_3d(
+  x: float, y: float, z: float, knee_sign: float, offset_y: float
+) -> tuple[float, float, float]:
+  """Solve the downward leg branch; project unreachable requests onto reach.
+
+  ``offset_y`` is positive for left legs and negative for right legs. Joint
+  limits must still be enforced by the caller, as with :func:`inverse`.
+  """
+  sagittal_z = -math.sqrt(max(y * y + z * z - offset_y**2, 1e-12))
+  roll = math.atan2(z, y) - math.atan2(sagittal_z, offset_y)
+  roll = math.atan2(math.sin(roll), math.cos(roll))
+  pitch, knee = inverse(x, sagittal_z, knee_sign)
+  return roll, pitch, knee
