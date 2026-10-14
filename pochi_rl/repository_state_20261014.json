@@ -1,0 +1,50 @@
+{
+  "branch": "work/pochi-consolidation-20261014",
+  "previous_branch": "fix/cad-visual-quality",
+  "previous_head": "3924f0d72873be1bb29bf6189c2b2a304bc94fd0",
+  "commits": [
+    {
+      "title": "Preserve CAD-detail meshes and regenerate visual geometry with sharp edges",
+      "sha": "ecc92409e401cd957949ea3ed3739be28b354b02",
+      "files": 48
+    },
+    {
+      "title": "Track stand-up joint trajectories and use hardware gains for deliberate walking",
+      "sha": "fbbc5388e9ef3d3d3c6d8d5c56b759c6b95ed788",
+      "files": 11
+    },
+    {
+      "title": "Add centroidal MPC walking and inverse-kinematics side-jump controllers",
+      "sha": "c6ef9765d53840929308b4854bf382d98c52377e",
+      "files": 13
+    },
+    {
+      "title": "Archive LP-ACRL walking variants, physics guards and experiment tooling through V19",
+      "sha": "9eb8120a9f4bd2c867f367e97ac941c2fe45dddf",
+      "files": 259
+    },
+    {
+      "title": "Add torque-margin refinement, export and persistent training tools",
+      "sha": "7c527fdcf0aa11f0e339c2a62cb9cb4ebe8d4351",
+      "files": 6
+    },
+    {
+      "title": "Add hardware-informed walking and quiet-stop refinement with artifact watcher",
+      "sha": "e7fc3ab3784b360fe89b2c8079d82f09244e8050",
+      "files": 7
+    }
+  ],
+  "tests": "1960 passed, 3 skipped, 50 warnings in 96.41s (0:01:36)",
+  "ssh_training_branch": "archive/v19-ssh-20261014",
+  "ssh_training_head": "370e780850d7fe073f1ed7f831b9576de02b3cbb",
+  "orin_hardware_branch": "archive/orin-hardware-20261014",
+  "orin_hardware_head": "e204ca95ed66b3789a69cfb66b3df43c1c2d8ff6",
+  "training_source_worktree": ".training-worktrees/v19-ssh-20261014",
+  "hardware_source_worktree": ".hardware-worktrees/orin-20261014",
+  "source_content_preserved": true,
+  "next_training_compute": "Local GPUs authorized by operator; no new training started",
+  "large_training_outputs": "Original host paths and local pochi_rl/logs; excluded from Git",
+  "hardware_runtime": "No source, firmware, service or torque change during Git organization",
+  "current_local_geometry_equals_ssh_geometry": false,
+  "merge_status": "Local, training-source archive and Orin archive remain separate branches"
+}

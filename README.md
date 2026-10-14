@@ -1,6 +1,8 @@
 # Pochi
 CoREストライダー部門用のロボット「Pochi」のメインレポジトリです。
 
+機体の構成は [Pochi の構成解説 — メカ・電装・制御](ROBOT_OVERVIEW.md) を参照してください。
+
 詳細はドキュメントサイトを参照してください。
 
 ## 開発ルール
@@ -41,3 +43,21 @@ ros2 launch core_launch navigation.launch.py environment:=real map_name:=curious
 ros2 launch core_hardware core_hardware.launch.py
 ```
 Launch 引数の詳細はドキュメントサイトの「クイックスタート」を参照してください。
+
+
+## 2026-10-14 の変更整理
+
+作業版は `work/pochi-consolidation-20261014` に、CAD、起立・低速歩行、MPC・横ジャンプ、
+LP-ACRLの過去実験、トルク余裕学習、歩行・停止の再学習を分けてコミットしています。
+変更の記録は `pochi_rl/repository_state_20261014.json` を参照してください。
+
+実際にSSH先で学習したソースとアセットは `archive/v19-ssh-20261014`、
+Orinの実機コード・配布モデルは `archive/orin-hardware-20261014` に保存しています。
+前者の作業ツリーは `.training-worktrees/v19-ssh-20261014/`、後者は
+`.hardware-worktrees/orin-20261014/` です。SSH側の学習時のアセットと、この作業版の
+CADアセットは異なるため、履歴を分けてそのまま残しています。
+
+次の学習は利用許可が戻ったローカルGPUを使用します。大きい学習チェックポイント・
+動画・CSVは各ホストの元の保存先に残し、実機起動に必要な小さいTorchScriptモデルと
+契約は実機ブランチに含めています。機体固有のキャリブレーションはOrin上で保持します。
+今回の整理は学習開始、実機の制御コード変更、サービス再起動を伴いません。
