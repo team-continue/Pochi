@@ -8,6 +8,36 @@ uv sync --group cad
 uv run python scripts/glb_to_mjcf.py --report
 ```
 
+The default `--visual-quality cad` preserves the source CAD triangles, including
+the RS02 housings. It omits M3/M4 fasteners from the visuals only. Sharp edges
+are split at 30 degrees and OBJ vertex normals are exported, so flat plates stay
+flat while cylindrical surfaces shade smoothly. No vertices are snapped to a
+grid. The complete robot has about 1.23 million visual triangles, which costs
+more viewer memory and initial loading time than the old simplified model.
+
+For a lighter viewer, explicitly regenerate with `--visual-quality compact`.
+That mode uses per-part decimation and cylindrical motor proxies; the face
+budgets are best-effort and never enforced by coarse vertex snapping. Both
+modes use the same original CAD for masses, joint frames and collision shapes.
+
+### Imported archive (2026-10-06)
+
+The 27 STL files in `pkg_4leg_assem2/meshes/` were refreshed from the repository
+root's `4leg_assem2.zip` (SHA-256
+`7a804532d39b04c33d74c145c4c70f1a1892b1016bbd6e87277d05fdd82a7b51`).
+Their triangle geometry and the archive's per-part mass table match the previous
+export. The new archive's URDF has 1661 links and no `dof_` joint names, so it
+does **not** replace the annotated 1629-link URDF already in this project.
+The existing joint definitions and part placements remain the reference for
+assembling these meshes. Do not overwrite that URDF with an unannotated export;
+a changed assembly requires an explicit review of the twelve joint mappings.
+
+The old visual pipeline reduced each link to a small face budget, then snapped
+vertices to a 1.5–6 mm grid when decimation stalled. That deformed 2–4 mm plates
+and holes despite the source STL files already containing the full detail.
+The CAD-quality default fixes the conversion rather than requiring another
+higher-resolution Onshape export.
+
 The primary input is **`pkg_4leg_assem2/`**, the onshape-to-robot URDF export.
 It carries both halves of what the model needs:
 

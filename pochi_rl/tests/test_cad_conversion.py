@@ -77,7 +77,7 @@ def test_urdf_mass_table_covers_every_part() -> None:
   from pochi_rl.cad.glb import Glb
 
   urdf = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[1]
     / "pkg_4leg_assem2"
     / "urdf"
     / "pkg_4leg_assem2.urdf"

@@ -1,4 +1,4 @@
-"""Regenerate assets/pochi/pochi.xml and its meshes from the CAD GLB export."""
+"""Regenerate assets/pochi/pochi.xml and its meshes from a CAD URDF or GLB."""
 
 from __future__ import annotations
 
@@ -11,14 +11,11 @@ from pochi_rl.cad import convert
 from pochi_rl.cad.glb import Glb
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GLB = REPO_ROOT / "4leg_assem2.glb"
-# onshape-to-robot URDF export of the same assembly.  Its kinematics are
-# unusable (every untagged Onshape mate became a joint), but it carries the
-# per-part masses Onshape computed from the real materials, which the GLB has
-# no way to express.  Optional: without it the converter falls back to guessing
-# a density from each part name.
-DEFAULT_URDF = REPO_ROOT / "pkg_4leg_assem2" / "urdf" / "pkg_4leg_assem2.urdf"
-DEFAULT_OUT = Path(__file__).resolve().parents[1] / "assets" / "pochi"
+# The annotated URDF supplies the twelve dof_ mates and per-part CAD masses.
+DEFAULT_URDF = PROJECT_ROOT / "pkg_4leg_assem2" / "urdf" / "pkg_4leg_assem2.urdf"
+DEFAULT_OUT = PROJECT_ROOT / "assets" / "pochi"
 
 
 def main() -> None:
@@ -44,6 +41,12 @@ def main() -> None:
     help="where the kinematics come from (default: the URDF's dof_ mates)",
   )
   parser.add_argument("--report", action="store_true", help="print CAD diagnostics")
+  parser.add_argument(
+    "--visual-quality",
+    choices=("cad", "compact"),
+    default="cad",
+    help="cad preserves source geometry; compact reduces detail for lighter viewers",
+  )
   args = parser.parse_args()
 
   convert.RS02_MASS_KG = args.rs02_mass
@@ -69,7 +72,11 @@ def main() -> None:
     print(f"kinematics from {args.glb} (inferred from motor placement)")
 
   xml, total_mass, faces = convert.build_mjcf(
-    model, meshes, args.out / "meshes", urdf_masses
+    model,
+    meshes,
+    args.out / "meshes",
+    urdf_masses,
+    visual_quality=args.visual_quality,
   )
   (args.out / "pochi.xml").write_text(xml)
 

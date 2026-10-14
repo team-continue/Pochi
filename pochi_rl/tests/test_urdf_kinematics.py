@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 URDF = (
-  Path(__file__).resolve().parents[2]
+  Path(__file__).resolve().parents[1]
   / "pkg_4leg_assem2"
   / "urdf"
   / "pkg_4leg_assem2.urdf"
