@@ -158,12 +158,19 @@ class StandUpReferenceSpec:
   the nominal stance, after a pause to settle -- so a policy that tracks it is
   reproducing that manoeuvre rather than merely arriving at the same pose.
 
-  ``pochi_rl.control.standup.reference_height`` is the one implementation, so
-  the scripted controller and the reward cannot drift apart.
+  Tracking the height alone still leaves a long-horizon exploration problem:
+  from scratch, PPO either learns to stand in 0.8 s (before the shaping was
+  gated) or stalls twenty centimetres short of the reference, and neither more
+  entropy nor more iterations reliably fixed it.  The joint trajectory is
+  therefore part of the reference too, which makes the objective dense.
+
+  ``pochi_rl.control.standup`` holds the one implementation of both, so the
+  scripted controller and the reward cannot drift apart.
   """
 
   settle_s: float = 0.75
-  rise_s: float = 6.0
+  approach_s: float = 2.5
+  rise_s: float = 5.0
 
 
 @dataclass(frozen=True)
@@ -177,6 +184,9 @@ class StandUpRewardWeights:
   # `rewards.height_tracking_error`.  Without it the exponential kernel alone
   # has a plateau the policy is happy to sit on, 20 cm below the reference.
   height_error: float = -8.0
+  # Joint-space tracking of the same manoeuvre.  This is what makes the task
+  # learnable in one run rather than a search over entropy schedules.
+  track_joints: float = 4.0
   upright: float = 1.0
   # Hold the stance the velocity task expects, so a policy hand-off is clean.
   # Faded in over the ramp -- see `rewards.posture_along_ramp` for why an
@@ -271,6 +281,11 @@ class PochiStandUpSpec:
   # narrow enough to be worth actually tracking.
   height_std: float = 0.10
   upright_std: float = 0.3
+  # Width of the joint-tracking kernel, as L1 summed over all twelve joints
+  # [rad].  Wide enough that the policy is not asked to be the scripted
+  # controller to the milliradian -- it has a different actuator envelope and a
+  # randomised start -- but tight enough to pin the shape of the motion.
+  joint_std: float = 2.0
 
   @property
   def policy_dim(self) -> int:

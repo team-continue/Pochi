@@ -7,6 +7,7 @@ import pytest
 
 from pochi_rl.control.standup import COLLAPSED_BASE_HEIGHT, COLLAPSED_JOINT_POS
 from pochi_rl.robot import (
+  DEFAULT_JOINT_POS,
   JOINT_NAMES,
   NOMINAL_BASE_HEIGHT,
   RS02_NO_LOAD_SPEED_RAD_S,
@@ -97,18 +98,52 @@ def test_observation_layout_matches_the_velocity_task() -> None:
 def test_reference_ramp_starts_collapsed_and_ends_standing() -> None:
   from pochi_rl.control.standup import COLLAPSED_BASE_HEIGHT, reference_height
 
-  settle, rise = S.reference.settle_s, S.reference.rise_s
-  assert reference_height(0.0, settle, rise) == pytest.approx(COLLAPSED_BASE_HEIGHT)
-  assert reference_height(settle, settle, rise) == pytest.approx(COLLAPSED_BASE_HEIGHT)
-  assert reference_height(settle + rise, settle, rise) == pytest.approx(
+  settle = S.reference.settle_s
+  approach = S.reference.approach_s
+  rise = S.reference.rise_s
+  total = settle + approach + rise
+  assert reference_height(0.0, settle, approach, rise) == pytest.approx(
+    COLLAPSED_BASE_HEIGHT
+  )
+  assert reference_height(settle, settle, approach, rise) == pytest.approx(
+    COLLAPSED_BASE_HEIGHT
+  )
+  assert reference_height(total, settle, approach, rise) == pytest.approx(
     NOMINAL_BASE_HEIGHT
   )
-  # Monotone, and slow enough that the rise never needs the safe motor envelope
-  # to be anywhere near saturated.
-  times = np.linspace(0.0, settle + rise + 2.0, 400)
-  ref = np.array([reference_height(t, settle, rise) for t in times])
+  # Monotone, and slow enough that following it never needs the safe motor
+  # envelope to be anywhere near saturated.
+  times = np.linspace(0.0, total + 2.0, 400)
+  ref = np.array([reference_height(t, settle, approach, rise) for t in times])
   assert np.all(np.diff(ref) >= -1e-12)
   assert np.max(np.abs(np.gradient(ref, times))) < 0.1  # m/s
+
+
+def test_joint_reference_starts_collapsed_and_ends_standing() -> None:
+  """The trajectory the reward tracks is the manoeuvre, and it is legal."""
+  from pochi_rl.control.standup import reference_joint_pos
+
+  settle = S.reference.settle_s
+  approach = S.reference.approach_s
+  rise = S.reference.rise_s
+  total = settle + approach + rise
+
+  start = reference_joint_pos(0.0, settle, approach, rise)
+  assert start == pytest.approx([COLLAPSED_JOINT_POS[n] for n in JOINT_NAMES])
+  end = reference_joint_pos(total, settle, approach, rise)
+  assert end == pytest.approx([DEFAULT_JOINT_POS[n] for n in JOINT_NAMES], abs=0.01)
+
+  dt = S.control.sim_dt * S.control.decimation
+  traj = np.array(
+    [
+      reference_joint_pos(i * dt, settle, approach, rise)
+      for i in range(int((total + 2.0) / dt))
+    ]
+  )
+  for name, column in zip(JOINT_NAMES, traj.T, strict=True):
+    assert np.max(np.abs(column)) <= LIMITS[name.split("_", 1)[1]], name
+  # Slow enough that a policy tracking it stays inside the motor envelope.
+  assert (np.abs(np.diff(traj, axis=0)) / dt).max() < S.safety.soft_speed_limit
 
 
 def test_torch_reference_matches_the_scripted_one() -> None:
@@ -119,7 +154,9 @@ def test_torch_reference_matches_the_scripted_one() -> None:
   from pochi_rl.control.standup import reference_height
   from pochi_rl.mjlab.rewards import standup_reference_height
 
-  settle, rise = S.reference.settle_s, S.reference.rise_s
+  settle = S.reference.settle_s
+  approach = S.reference.approach_s
+  rise = S.reference.rise_s
   dt = S.control.sim_dt * S.control.decimation
   steps = torch.arange(0, 500)
 
@@ -127,8 +164,10 @@ def test_torch_reference_matches_the_scripted_one() -> None:
     episode_length_buf = steps
     step_dt = dt
 
-  got = standup_reference_height(_FakeEnv(), settle, rise).numpy()  # type: ignore[arg-type]
-  want = np.array([reference_height(int(s) * dt, settle, rise) for s in steps])
+  got = standup_reference_height(_FakeEnv(), settle, approach, rise).numpy()  # type: ignore[arg-type]
+  want = np.array(
+    [reference_height(int(s) * dt, settle, approach, rise) for s in steps]
+  )
   assert np.allclose(got, want, atol=1e-6)
 
 
@@ -136,15 +175,18 @@ def test_posture_penalty_is_off_while_the_robot_is_still_down() -> None:
   """The one shaping detail the manoeuvre lives or dies on.
 
   Ungated, the posture penalty bills a robot lying on the floor roughly as much
-  per step as tracking the ramp is worth, and the policy learns to leap to the
-  standing pose and wait for the reference to catch up.
+  per step as tracking the reference is worth, and the policy learns to leap to
+  the standing pose and wait for the reference to catch up.
   """
   pytest.importorskip("mjlab")
   import torch
 
   from pochi_rl.mjlab.rewards import standup_phase
 
-  settle, rise = S.reference.settle_s, S.reference.rise_s
+  settle = S.reference.settle_s
+  approach = S.reference.approach_s
+  rise = S.reference.rise_s
+  total = settle + approach + rise
   dt = S.control.sim_dt * S.control.decimation
 
   class _FakeEnv:
@@ -153,13 +195,14 @@ def test_posture_penalty_is_off_while_the_robot_is_still_down() -> None:
     def __init__(self, seconds: float) -> None:
       self.episode_length_buf = torch.tensor([int(seconds / dt)])
 
-  assert float(standup_phase(_FakeEnv(0.0), settle, rise)) == 0.0
-  assert float(standup_phase(_FakeEnv(settle), settle, rise)) == pytest.approx(0.0)
-  assert float(standup_phase(_FakeEnv(settle + rise), settle, rise)) == pytest.approx(
-    1.0, abs=0.01
-  )
-  # And it stays clamped after the ramp finishes, rather than growing.
-  assert float(standup_phase(_FakeEnv(settle + rise + 5.0), settle, rise)) == 1.0
+  def phase(seconds: float) -> float:
+    return float(standup_phase(_FakeEnv(seconds), settle, approach, rise))  # type: ignore[arg-type]
+
+  assert phase(0.0) == 0.0
+  assert phase(total / 2) == pytest.approx(0.5, abs=0.01)
+  assert phase(total) == pytest.approx(1.0, abs=0.01)
+  # And it stays clamped after the manoeuvre finishes, rather than growing.
+  assert phase(total + 5.0) == 1.0
 
 
 def _env(num_envs: int = 8):

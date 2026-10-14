@@ -71,6 +71,18 @@ FOOT_PAD_OFFSET = NOMINAL_BASE_HEIGHT - _NOMINAL_EXTENSION
 MIN_CROUCH_HEIGHT = lk.MIN_REACH + FOOT_PAD_OFFSET + 0.01
 
 
+def _stance_pose(base_height: float) -> list[float]:
+  """Joint angles standing the base at ``base_height``, feet under the hips."""
+  reach = base_height - FOOT_PAD_OFFSET
+  pose = dict.fromkeys(JOINT_NAMES, 0.0)
+  for leg in LEGS:
+    hip_pitch, knee = lk.inverse(0.0, -reach, _KNEE_SIGN[leg])
+    pose[f"{leg}_hip_roll"] = 0.0
+    pose[f"{leg}_hip_pitch"] = hip_pitch
+    pose[f"{leg}_knee"] = knee
+  return [pose[name] for name in JOINT_NAMES]
+
+
 def _folded_stance() -> dict[str, float]:
   """Joint angles for the deepest crouch, feet straight under the hips."""
   reach = MIN_CROUCH_HEIGHT - FOOT_PAD_OFFSET
@@ -119,16 +131,45 @@ def _smoothstep(u: float) -> float:
   return u * u * (3.0 - 2.0 * u)
 
 
-def reference_height(t: float, settle_s: float, rise_s: float) -> float:
+def reference_height(
+  t: float, settle_s: float, approach_s: float, rise_s: float
+) -> float:
   """Base height the manoeuvre should be at ``t`` seconds in.
 
-  Hold at the collapsed height for ``settle_s``, then smoothstep up to the
-  nominal stance over ``rise_s``.  Both the scripted controller and the learned
-  task's reward read this, so the shape they are aiming at is defined once.
+  The three phases of :class:`StandUpController`: hold on the floor, close the
+  splayed hips up into the crouch, then extend to the nominal stance.  Both the
+  scripted controller and the learned task's reward read this, so the shape
+  they aim at is defined once.
   """
-  return COLLAPSED_BASE_HEIGHT + (NOMINAL_BASE_HEIGHT - COLLAPSED_BASE_HEIGHT) * (
-    _smoothstep((t - settle_s) / rise_s)
+  approach = _smoothstep((t - settle_s) / approach_s)
+  rise = _smoothstep((t - settle_s - approach_s) / rise_s)
+  crouch = (
+    COLLAPSED_BASE_HEIGHT + (MIN_CROUCH_HEIGHT - COLLAPSED_BASE_HEIGHT) * approach
   )
+  return crouch + (NOMINAL_BASE_HEIGHT - MIN_CROUCH_HEIGHT) * rise
+
+
+def reference_joint_pos(
+  t: float, settle_s: float, approach_s: float, rise_s: float
+) -> list[float]:
+  """The manoeuvre's joint targets at ``t``, in ``JOINT_NAMES`` order.
+
+  The open-loop half of :class:`StandUpController` -- the same interpolation and
+  the same IK, minus the droop integrator, which needs a measurement and so has
+  no place in a reference.  The learned task rewards tracking this, which is
+  what turns "get off the floor" from a long-horizon exploration problem into a
+  dense one: from-scratch PPO on the height alone either stands up in 0.8 s or
+  stalls part way, depending on how the shaping is tuned.
+  """
+  collapsed = [COLLAPSED_JOINT_POS[name] for name in JOINT_NAMES]
+  crouch = _stance_pose(MIN_CROUCH_HEIGHT)
+  if t < settle_s:
+    return collapsed
+  if t < settle_s + approach_s:
+    s = _smoothstep((t - settle_s) / approach_s)
+    return [(1.0 - s) * a + s * b for a, b in zip(collapsed, crouch, strict=True)]
+  height = reference_height(t, settle_s, approach_s, rise_s)
+  return _stance_pose(height)
 
 
 @dataclass(frozen=True)

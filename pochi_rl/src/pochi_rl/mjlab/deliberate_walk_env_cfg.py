@@ -1,6 +1,7 @@
 """A low-speed crawl: one foot swings, three support the body."""
 
-from dataclasses import fields
+import math
+from dataclasses import fields, replace
 
 from mjlab.managers.observation_manager import ObservationTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
@@ -12,8 +13,27 @@ from pochi_rl.mjlab.agents.rsl_rl_ppo_cfg import pochi_flat_ppo_runner_cfg
 from pochi_rl.mjlab.velocity_flat_env_cfg import pochi_velocity_flat_env_cfg
 
 
+def set_pd_gains(cfg, *, kp: float, kd: float) -> None:
+  """Set joint-space MIT gains without mutating another task's robot config."""
+  if not math.isfinite(kp) or not math.isfinite(kd) or kp <= 0 or kd < 0:
+    raise ValueError("PD gains must be finite, with kp > 0 and kd >= 0")
+  robot = cfg.scene.entities["robot"]
+  assert robot.articulation is not None
+  cfg.scene.entities["robot"] = replace(
+    robot,
+    articulation=replace(
+      robot.articulation,
+      actuators=tuple(
+        replace(actuator, stiffness=kp, damping=kd)
+        for actuator in robot.articulation.actuators
+      ),
+    ),
+  )
+
+
 def pochi_deliberate_walk_env_cfg(play: bool = False):
   cfg = pochi_velocity_flat_env_cfg(play=play)
+  set_pd_gains(cfg, kp=gait.SPEC.kp, kd=gait.SPEC.kd)
   cfg.curriculum = {}
   command = cfg.commands["base_velocity"]
   command.ranges.lin_vel_x = (0.06, 0.14) if not play else (0.1, 0.1)

@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
   p.add_argument(
     "--seconds",
     type=float,
-    default=S.reference.settle_s + S.reference.rise_s + 3.0,
+    default=S.reference.settle_s + S.reference.approach_s + S.reference.rise_s + 3.0,
   )
   p.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
   return p.parse_args()
@@ -85,7 +85,15 @@ def roll_out(args: argparse.Namespace) -> dict[str, float]:
       h = robot.data.root_link_pos_w[:, 2].mean().item()
       heights.append(h)
       errors.append(
-        abs(h - reference_height(step * dt, S.reference.settle_s, S.reference.rise_s))
+        abs(
+          h
+          - reference_height(
+            step * dt,
+            S.reference.settle_s,
+            S.reference.approach_s,
+            S.reference.rise_s,
+          )
+        )
       )
       if np.isnan(rise_time) and h > NOMINAL_BASE_HEIGHT - 0.02:
         rise_time = step * dt
@@ -119,7 +127,12 @@ def scripted_reference(seconds: float) -> dict[str, float]:
     errors.append(
       abs(
         sim.base_height
-        - reference_height(step * dt, S.reference.settle_s, S.reference.rise_s)
+        - reference_height(
+          step * dt,
+          S.reference.settle_s,
+          S.reference.approach_s,
+          S.reference.rise_s,
+        )
       )
     )
     if np.isnan(rise_time) and sim.base_height > NOMINAL_BASE_HEIGHT - 0.02:

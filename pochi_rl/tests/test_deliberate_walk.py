@@ -66,6 +66,9 @@ def test_deliberate_walk_rollout_is_finite():
   env = ManagerBasedRlEnv(cfg=cfg, device="cpu")
   try:
     obs, _ = env.reset()
+    for actuator in env.scene["robot"].actuators:
+      assert (actuator.stiffness == 140.0).all()
+      assert (actuator.damping == 1.5).all()
     assert obs["actor"].shape == (2, 50)
     for _ in range(10):
       obs, reward, _, _, _ = env.step(torch.zeros(env.action_space.shape))
@@ -74,3 +77,23 @@ def test_deliberate_walk_rollout_is_finite():
     assert env.scene["feet_ground_contact"].data.found.shape == (2, 4)
   finally:
     env.close()
+
+
+@pytest.mark.parametrize("play", [False, True])
+def test_hardware_pd_gains_are_isolated_from_other_tasks(play):
+  from pochi_rl.mjlab.deliberate_walk_env_cfg import (
+    pochi_deliberate_walk_env_cfg,
+    set_pd_gains,
+  )
+  from pochi_rl.mjlab.entity_cfg import POCHI_ACTUATOR, POCHI_SLOW_ACTUATOR
+  from pochi_rl.mjlab.velocity_flat_env_cfg import pochi_velocity_flat_env_cfg
+
+  cfg = pochi_deliberate_walk_env_cfg(play=play)
+  actuator = cfg.scene.entities["robot"].articulation.actuators[0]
+  assert (actuator.stiffness, actuator.damping) == (140.0, 1.5)
+  legacy = pochi_velocity_flat_env_cfg(play=play)
+  assert legacy.scene.entities["robot"].articulation.actuators[0].stiffness == 60.0
+  # Re-evaluating an old policy at its training gain must not change defaults.
+  set_pd_gains(cfg, kp=60.0, kd=1.5)
+  assert (actuator.stiffness, actuator.damping) == (140.0, 1.5)
+  assert POCHI_ACTUATOR.stiffness == POCHI_SLOW_ACTUATOR.stiffness == 60.0

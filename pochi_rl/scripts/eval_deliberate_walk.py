@@ -127,6 +127,9 @@ def main():
   parser.add_argument("--checkpoint", type=Path, required=True)
   parser.add_argument("--device", default="cuda:2")
   parser.add_argument("--num-envs", type=int, default=32)
+  parser.add_argument("--seed", type=int, default=42)
+  parser.add_argument("--kp", type=float, help="Override joint-space MIT Kp")
+  parser.add_argument("--kd", type=float, help="Override joint-space MIT Kd")
   parser.add_argument("--seconds", type=float, default=14.0)
   parser.add_argument("--speeds", type=float, nargs="+", default=[0.06, 0.1, 0.14, 0.0])
   parser.add_argument("--output", type=Path)
@@ -149,7 +152,16 @@ def main():
 
   configure_torch_backends()
   cfg = load_env_cfg(args.task, play=True)
-  cfg.seed = 42
+  cfg.seed = args.seed
+  if args.kp is not None or args.kd is not None:
+    from pochi_rl.mjlab.deliberate_walk_env_cfg import set_pd_gains
+
+    actuator = cfg.scene.entities["robot"].articulation.actuators[0]
+    set_pd_gains(
+      cfg,
+      kp=actuator.stiffness if args.kp is None else args.kp,
+      kd=actuator.damping if args.kd is None else args.kd,
+    )
   cfg.scene.num_envs = args.num_envs
   cfg.viewer.width = 960
   cfg.viewer.height = 540
@@ -185,7 +197,17 @@ def main():
       )
       results.append(result)
       print(json.dumps(result, indent=2), flush=True)
-    report = {"task": args.task, "checkpoint": str(args.checkpoint), "results": results}
+    report = {
+      "task": args.task,
+      "checkpoint": str(args.checkpoint),
+      "seed": args.seed,
+      "continuous": args.continuous,
+      "pd_gains": [
+        {"kp": actuator.stiffness, "kd": actuator.damping}
+        for actuator in cfg.scene.entities["robot"].articulation.actuators
+      ],
+      "results": results,
+    }
     if args.output:
       args.output.write_text(json.dumps(report, indent=2) + "\n")
   finally:

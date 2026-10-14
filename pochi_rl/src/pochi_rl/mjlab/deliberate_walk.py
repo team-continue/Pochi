@@ -17,6 +17,9 @@ from pochi_rl.robot.pochi_constants import FOOT_SITES
 
 @dataclass(frozen=True)
 class DeliberateWalkSpec:
+  # RS02 MIT-mode gains confirmed on the hardware.
+  kp: float = 140.0
+  kd: float = 1.5
   period_s: float = 2.8
   swing_fraction: float = 0.20
   clearance_m: float = 0.045

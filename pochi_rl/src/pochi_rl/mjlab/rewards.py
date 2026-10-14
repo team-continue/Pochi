@@ -5,9 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import torch
+from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 
-from pochi_rl.control.standup import COLLAPSED_BASE_HEIGHT
+from pochi_rl.control.standup import (
+  COLLAPSED_BASE_HEIGHT,
+  MIN_CROUCH_HEIGHT,
+  reference_joint_pos,
+)
 from pochi_rl.robot import NOMINAL_BASE_HEIGHT
 
 if TYPE_CHECKING:
@@ -72,9 +77,15 @@ def _base_height(env: ManagerBasedRlEnv, asset_cfg: SceneEntityCfg) -> torch.Ten
   return asset.data.root_link_pos_w[:, 2] - env.scene.env_origins[:, 2]
 
 
+def _smoothstep(u: torch.Tensor) -> torch.Tensor:
+  u = u.clamp(0.0, 1.0)
+  return u * u * (3.0 - 2.0 * u)
+
+
 def standup_reference_height(
   env: ManagerBasedRlEnv,
   settle_s: float,
+  approach_s: float,
   rise_s: float,
 ) -> torch.Tensor:
   """The commanded base height for every environment, from its own clock.
@@ -83,25 +94,29 @@ def standup_reference_height(
   and the constants both come from there.
   """
   t = env.episode_length_buf.float() * env.step_dt
-  u = ((t - settle_s) / rise_s).clamp(0.0, 1.0)
-  smoothstep = u * u * (3.0 - 2.0 * u)
-  span = NOMINAL_BASE_HEIGHT - COLLAPSED_BASE_HEIGHT
-  return COLLAPSED_BASE_HEIGHT + span * smoothstep
+  approach = _smoothstep((t - settle_s) / approach_s)
+  rise = _smoothstep((t - settle_s - approach_s) / rise_s)
+  crouch = (
+    COLLAPSED_BASE_HEIGHT + (MIN_CROUCH_HEIGHT - COLLAPSED_BASE_HEIGHT) * approach
+  )
+  return crouch + (NOMINAL_BASE_HEIGHT - MIN_CROUCH_HEIGHT) * rise
 
 
 def standup_phase(
   env: ManagerBasedRlEnv,
   settle_s: float,
+  approach_s: float,
   rise_s: float,
 ) -> torch.Tensor:
-  """How far through the height ramp each environment is, in [0, 1]."""
+  """How far through the whole manoeuvre each environment is, in [0, 1]."""
   t = env.episode_length_buf.float() * env.step_dt
-  return ((t - settle_s) / rise_s).clamp(0.0, 1.0)
+  return (t / (settle_s + approach_s + rise_s)).clamp(0.0, 1.0)
 
 
 def standup_reference_obs(
   env: ManagerBasedRlEnv,
   settle_s: float,
+  approach_s: float,
   rise_s: float,
 ) -> torch.Tensor:
   """What the policy is told about the ramp: the target, and its progress.
@@ -111,14 +126,15 @@ def standup_reference_obs(
   and the only guess with any value is "as high as possible, immediately".
   Hardware has a clock too, so this costs nothing at deployment.
   """
-  height = standup_reference_height(env, settle_s, rise_s)
-  phase = standup_phase(env, settle_s, rise_s)
+  height = standup_reference_height(env, settle_s, approach_s, rise_s)
+  phase = standup_phase(env, settle_s, approach_s, rise_s)
   return torch.stack((height, phase), dim=-1)
 
 
 def base_height_tracking(
   env: ManagerBasedRlEnv,
   settle_s: float,
+  approach_s: float,
   rise_s: float,
   std: float,
   asset_cfg: SceneEntityCfg = ROBOT,
@@ -130,7 +146,7 @@ def base_height_tracking(
   which is where it spends the start of every episode, and a reward with no
   gradient there is no reward at all.
   """
-  reference = standup_reference_height(env, settle_s, rise_s)
+  reference = standup_reference_height(env, settle_s, approach_s, rise_s)
   height = _base_height(env, asset_cfg)
   return torch.exp(-torch.abs(height - reference) / std)
 
@@ -149,6 +165,7 @@ def upright(
 def posture_along_ramp(
   env: ManagerBasedRlEnv,
   settle_s: float,
+  approach_s: float,
   rise_s: float,
   asset_cfg: SceneEntityCfg = ROBOT,
 ) -> torch.Tensor:
@@ -170,7 +187,7 @@ def posture_along_ramp(
     ),
     dim=1,
   )
-  return deviation * standup_phase(env, settle_s, rise_s)
+  return deviation * standup_phase(env, settle_s, approach_s, rise_s)
 
 
 def joint_speed_over_limit(
@@ -203,6 +220,7 @@ def feet_on_ground(
 def height_tracking_error(
   env: ManagerBasedRlEnv,
   settle_s: float,
+  approach_s: float,
   rise_s: float,
   asset_cfg: SceneEntityCfg = ROBOT,
 ) -> torch.Tensor:
@@ -215,8 +233,53 @@ def height_tracking_error(
   a run without this term settles into.  A linear error has the same gradient
   everywhere, so there is always a reason to close the gap.
   """
-  reference = standup_reference_height(env, settle_s, rise_s)
+  reference = standup_reference_height(env, settle_s, approach_s, rise_s)
   return torch.abs(_base_height(env, asset_cfg) - reference)
+
+
+class JointReferenceTracking:
+  """Reward following the scripted manoeuvre's joint trajectory.
+
+  The reference is analytic and depends only on time, so it is tabulated once
+  per environment build -- one row per control step, held at the final stance
+  past the end of the manoeuvre -- and indexed by each environment's own step
+  counter.  That keeps the per-step cost to a gather.
+
+  This term is what makes the task learnable in a single run.  Rewarding base
+  height alone leaves PPO to discover a long, narrowly-constrained sequence by
+  itself: it reliably finds either an immediate lunge or a plateau part of the
+  way up, and which one depends on shaping details rather than on effort spent
+  training.
+  """
+
+  def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRlEnv) -> None:
+    settle_s = cfg.params["settle_s"]
+    approach_s = cfg.params["approach_s"]
+    rise_s = cfg.params["rise_s"]
+    steps = int(round(env.max_episode_length_s / env.step_dt)) + 1
+    table = [
+      reference_joint_pos(i * env.step_dt, settle_s, approach_s, rise_s)
+      for i in range(steps)
+    ]
+    self._table = torch.tensor(table, dtype=torch.float32, device=env.device)
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    settle_s: float,
+    approach_s: float,
+    rise_s: float,
+    std: float,
+    asset_cfg: SceneEntityCfg = ROBOT,
+  ) -> torch.Tensor:
+    del settle_s, approach_s, rise_s  # Baked into the table.
+    asset = env.scene[asset_cfg.name]
+    index = env.episode_length_buf.clamp(max=self._table.shape[0] - 1)
+    reference = self._table[index]
+    error = torch.sum(
+      torch.abs(asset.data.joint_pos[:, asset_cfg.joint_ids] - reference), dim=1
+    )
+    return torch.exp(-error / std)
 
 
 def contact_while_lifted(

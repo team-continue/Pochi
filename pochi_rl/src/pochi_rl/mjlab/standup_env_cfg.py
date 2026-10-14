@@ -79,6 +79,7 @@ def _observation_terms(*, add_noise: bool) -> dict[str, ObservationTermCfg]:
       func=pochi_rewards.standup_reference_obs,
       params={
         "settle_s": S.reference.settle_s,
+        "approach_s": S.reference.approach_s,
         "rise_s": S.reference.rise_s,
       },
     ),
@@ -157,9 +158,21 @@ def pochi_standup_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       weight=S.rewards.track_height,
       params={
         "settle_s": S.reference.settle_s,
+        "approach_s": S.reference.approach_s,
         "rise_s": S.reference.rise_s,
         "std": S.height_std,
         "asset_cfg": ROBOT,
+      },
+    ),
+    "track_joints": RewardTermCfg(
+      func=pochi_rewards.JointReferenceTracking,
+      weight=S.rewards.track_joints,
+      params={
+        "settle_s": S.reference.settle_s,
+        "approach_s": S.reference.approach_s,
+        "rise_s": S.reference.rise_s,
+        "std": S.joint_std,
+        "asset_cfg": JOINTS,
       },
     ),
     "height_error": RewardTermCfg(
@@ -167,6 +180,7 @@ def pochi_standup_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       weight=S.rewards.height_error,
       params={
         "settle_s": S.reference.settle_s,
+        "approach_s": S.reference.approach_s,
         "rise_s": S.reference.rise_s,
         "asset_cfg": ROBOT,
       },
@@ -181,6 +195,7 @@ def pochi_standup_flat_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
       weight=S.rewards.posture,
       params={
         "settle_s": S.reference.settle_s,
+        "approach_s": S.reference.approach_s,
         "rise_s": S.reference.rise_s,
         "asset_cfg": JOINTS,
       },
