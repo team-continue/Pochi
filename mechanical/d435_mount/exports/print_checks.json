@@ -1,0 +1,102 @@
+{
+  "slicer": "PrusaSlicer-2.8.1+linux-x64-GTK3-202409181416 based on Slic3r (with GUI support)",
+  "profile": {
+    "nozzle_mm": 0.4,
+    "layer_height_mm": 0.2,
+    "perimeters": 6,
+    "fill_density_percent": 50,
+    "fill_pattern": "gyroid",
+    "top_solid_layers": 6,
+    "bottom_solid_layers": 6,
+    "supports": false
+  },
+  "variants": [
+    {
+      "angle_deg": 25,
+      "stl_sha256": "4202caffa41659b88c33ac239be9f18e39cd4f0df184fe1dd39841f16f1bf742",
+      "layers": 250,
+      "support_toolpaths": 0,
+      "types": {
+        "Custom": 2,
+        "Skirt/Brim": 1,
+        "Perimeter": 320,
+        "External perimeter": 312,
+        "Solid infill": 296,
+        "Internal infill": 508,
+        "Bridge infill": 22,
+        "Top solid infill": 9,
+        "Overhang perimeter": 32
+      }
+    },
+    {
+      "angle_deg": 30,
+      "stl_sha256": "04d55bdd7eea6daad115ec0e976505b9fb939c64ce4b12c38fb8cbedc472e4c2",
+      "layers": 250,
+      "support_toolpaths": 0,
+      "types": {
+        "Custom": 2,
+        "Skirt/Brim": 1,
+        "Perimeter": 320,
+        "External perimeter": 312,
+        "Solid infill": 300,
+        "Internal infill": 507,
+        "Bridge infill": 21,
+        "Top solid infill": 8,
+        "Overhang perimeter": 32
+      }
+    },
+    {
+      "angle_deg": 35,
+      "stl_sha256": "1246fb662a69a112e645341d6163f6812c53e4aef2c109949f7ef48119dfc36f",
+      "layers": 250,
+      "support_toolpaths": 0,
+      "types": {
+        "Custom": 2,
+        "Skirt/Brim": 1,
+        "Perimeter": 320,
+        "External perimeter": 312,
+        "Solid infill": 306,
+        "Internal infill": 513,
+        "Bridge infill": 22,
+        "Top solid infill": 9,
+        "Overhang perimeter": 32
+      }
+    },
+    {
+      "angle_deg": 40,
+      "stl_sha256": "f696ca4bc2cc79dba7f45ea8affbd6b7b70d926327fc1336da055fa76c2594dc",
+      "layers": 250,
+      "support_toolpaths": 0,
+      "types": {
+        "Custom": 2,
+        "Skirt/Brim": 1,
+        "Perimeter": 320,
+        "External perimeter": 312,
+        "Solid infill": 293,
+        "Internal infill": 486,
+        "Bridge infill": 22,
+        "Top solid infill": 9,
+        "Overhang perimeter": 32
+      }
+    },
+    {
+      "angle_deg": 45,
+      "stl_sha256": "78fa100afba910c1f8edec245f6e56189a894645a6ebc7df1e04eb2888e2eec1",
+      "layers": 250,
+      "support_toolpaths": 0,
+      "types": {
+        "Custom": 2,
+        "Skirt/Brim": 1,
+        "Perimeter": 320,
+        "External perimeter": 312,
+        "Solid infill": 288,
+        "Internal infill": 458,
+        "Bridge infill": 22,
+        "Top solid infill": 9,
+        "Overhang perimeter": 32
+      }
+    }
+  ],
+  "physical_print_verified": false,
+  "load_test_verified": false
+}

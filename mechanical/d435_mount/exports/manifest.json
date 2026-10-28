@@ -1,0 +1,317 @@
+{
+  "units": "mm",
+  "revision": 4,
+  "default_angle_deg": 30,
+  "construction": "continuous wedge; full-size round heat-set insert bores printed directly",
+  "board_source": "pochi_rl/pkg_4leg_assem2/meshes/carbon_Body_plate3_x__3mm_x2_.stl",
+  "board_sha256": "1aaa542bd170e856d965ef387a9baf56e2e3ab6208659f18c937fdfd9e55d3e9",
+  "camera_source": "https://www.realsenseai.com/wp-content/uploads/2020/06/Intel-RealSense-D400-Series-Datasheet-June-2020.pdf#page=113",
+  "board_fixing_centres_yz_mm": [
+    [
+      -15.0,
+      -24.0
+    ],
+    [
+      -15.0,
+      24.0
+    ],
+    [
+      15.0,
+      -24.0
+    ],
+    [
+      15.0,
+      24.0
+    ]
+  ],
+  "camera_mount_pitch_mm": 45,
+  "camera_mount_max_insertion_mm": 3,
+  "base_thickness_mm": 8,
+  "camera_pad_thickness_mm": 6,
+  "board_screws": "4 x M3x8 inserted from board rear; 4 x M3 heat-set inserts",
+  "board_insert": {
+    "model": "ruthex RX-M3x5.7",
+    "thread": "M3",
+    "outer_diameter_mm": 4.6,
+    "length_mm": 5.7,
+    "printed_bore_diameter_mm": 4.0,
+    "bore_depth_mm": 6.7,
+    "minimum_radial_wall_mm": 1.6,
+    "source": "https://www.igo3d.com/mediafiles/Sonstiges/Ruthex/ruthex_Datenblatt_RX-Serie.pdf"
+  },
+  "board_screw_engagement_mm": 4.5,
+  "insert_drilling_required": false,
+  "camera_screws": "2 x M3x8 (2 mm nominal insertion without washer)",
+  "variants": [
+    {
+      "angle_deg": 25,
+      "watertight": true,
+      "connected_components": 1,
+      "bounds_mm": [
+        [
+          0.0,
+          -25.0,
+          -32.0
+        ],
+        [
+          46.6547,
+          25.0,
+          38.9143
+        ]
+      ],
+      "volume_cm3": 102.383,
+      "board_hole_centre_max_error_mm": 4.144397139562396e-05,
+      "motor_lateral_clearance_mm": 5.75,
+      "camera_back_centre_mm": [
+        31.01782,
+        0.0,
+        2.0
+      ],
+      "optical_direction": [
+        0.906308,
+        0.0,
+        -0.422618
+      ],
+      "camera_envelope_overlap_mm3": 1.779233812654994e-15,
+      "camera_side_unchanged_from_revision": 2,
+      "camera_side_difference_volume_mm3": 0.00022138832426622223,
+      "insert_bore_printed_at_full_size": true,
+      "root_section_at_x8_area_mm2": 3218.489,
+      "old_root_section_at_x8_area_mm2": 342.517,
+      "root_section_area_ratio": 9.397,
+      "physical_fit_verified": false,
+      "print_dimensions_mm": [
+        46.655,
+        70.914,
+        50.0
+      ],
+      "printability": {
+        "first_layer_area_mm2": 2094.974,
+        "first_layer_connected_components": 1,
+        "maximum_short_bridge_span_mm": 2.828,
+        "overhang_roof_angle_deg": 60,
+        "round_insert_hole_roofs_present": true,
+        "slicer_verified": true,
+        "slicer": "PrusaSlicer-2.8.1+linux-x64-GTK3-202409181416 based on Slic3r (with GUI support)",
+        "layer_count": 250,
+        "generated_support_toolpaths": 0
+      }
+    },
+    {
+      "angle_deg": 30,
+      "watertight": true,
+      "connected_components": 1,
+      "bounds_mm": [
+        [
+          0.0,
+          -25.0,
+          -32.0
+        ],
+        [
+          53.0,
+          25.0,
+          38.0429
+        ]
+      ],
+      "volume_cm3": 112.243,
+      "board_hole_centre_max_error_mm": 4.144397139562396e-05,
+      "motor_lateral_clearance_mm": 5.75,
+      "camera_back_centre_mm": [
+        34.5,
+        0.0,
+        2.0
+      ],
+      "optical_direction": [
+        0.866025,
+        0.0,
+        -0.5
+      ],
+      "camera_envelope_overlap_mm3": 1.9892317289298957e-13,
+      "camera_side_unchanged_from_revision": 2,
+      "camera_side_difference_volume_mm3": 0.00033115800709528694,
+      "insert_bore_printed_at_full_size": true,
+      "root_section_at_x8_area_mm2": 3198.361,
+      "old_root_section_at_x8_area_mm2": 341.782,
+      "root_section_area_ratio": 9.358,
+      "physical_fit_verified": false,
+      "print_dimensions_mm": [
+        53.0,
+        70.043,
+        50.0
+      ],
+      "printability": {
+        "first_layer_area_mm2": 2293.387,
+        "first_layer_connected_components": 1,
+        "maximum_short_bridge_span_mm": 2.828,
+        "overhang_roof_angle_deg": 60,
+        "round_insert_hole_roofs_present": true,
+        "slicer_verified": true,
+        "slicer": "PrusaSlicer-2.8.1+linux-x64-GTK3-202409181416 based on Slic3r (with GUI support)",
+        "layer_count": 250,
+        "generated_support_toolpaths": 0
+      }
+    },
+    {
+      "angle_deg": 35,
+      "watertight": true,
+      "connected_components": 1,
+      "bounds_mm": [
+        [
+          0.0,
+          -25.0,
+          -32.0
+        ],
+        [
+          59.0333,
+          25.0,
+          36.8972
+        ]
+      ],
+      "volume_cm3": 120.729,
+      "board_hole_centre_max_error_mm": 4.144397139562396e-05,
+      "motor_lateral_clearance_mm": 5.75,
+      "camera_back_centre_mm": [
+        37.81094,
+        0.0,
+        2.0
+      ],
+      "optical_direction": [
+        0.819152,
+        0.0,
+        -0.573576
+      ],
+      "camera_envelope_overlap_mm3": 2.5832397944379294e-12,
+      "camera_side_unchanged_from_revision": 2,
+      "camera_side_difference_volume_mm3": 0.0002779764235958215,
+      "insert_bore_printed_at_full_size": true,
+      "root_section_at_x8_area_mm2": 3180.126,
+      "old_root_section_at_x8_area_mm2": 340.977,
+      "root_section_area_ratio": 9.326,
+      "physical_fit_verified": false,
+      "print_dimensions_mm": [
+        59.033,
+        68.897,
+        50.0
+      ],
+      "printability": {
+        "first_layer_area_mm2": 2464.72,
+        "first_layer_connected_components": 1,
+        "maximum_short_bridge_span_mm": 2.828,
+        "overhang_roof_angle_deg": 60,
+        "round_insert_hole_roofs_present": true,
+        "slicer_verified": true,
+        "slicer": "PrusaSlicer-2.8.1+linux-x64-GTK3-202409181416 based on Slic3r (with GUI support)",
+        "layer_count": 250,
+        "generated_support_toolpaths": 0
+      }
+    },
+    {
+      "angle_deg": 40,
+      "watertight": true,
+      "connected_components": 1,
+      "bounds_mm": [
+        [
+          0.0,
+          -25.0,
+          -32.0
+        ],
+        [
+          64.7086,
+          25.0,
+          35.4859
+        ]
+      ],
+      "volume_cm3": 127.679,
+      "board_hole_centre_max_error_mm": 4.144397139562396e-05,
+      "motor_lateral_clearance_mm": 5.75,
+      "camera_back_centre_mm": [
+        40.92544,
+        0.0,
+        2.0
+      ],
+      "optical_direction": [
+        0.766044,
+        0.0,
+        -0.642788
+      ],
+      "camera_envelope_overlap_mm3": 2.4067769410819176e-12,
+      "camera_side_unchanged_from_revision": 2,
+      "camera_side_difference_volume_mm3": 6.74885157485722e-05,
+      "insert_bore_printed_at_full_size": true,
+      "root_section_at_x8_area_mm2": 3162.637,
+      "old_root_section_at_x8_area_mm2": 340.108,
+      "root_section_area_ratio": 9.299,
+      "physical_fit_verified": false,
+      "print_dimensions_mm": [
+        64.709,
+        67.486,
+        50.0
+      ],
+      "printability": {
+        "first_layer_area_mm2": 2605.95,
+        "first_layer_connected_components": 1,
+        "maximum_short_bridge_span_mm": 2.828,
+        "overhang_roof_angle_deg": 60,
+        "round_insert_hole_roofs_present": true,
+        "slicer_verified": true,
+        "slicer": "PrusaSlicer-2.8.1+linux-x64-GTK3-202409181416 based on Slic3r (with GUI support)",
+        "layer_count": 250,
+        "generated_support_toolpaths": 0
+      }
+    },
+    {
+      "angle_deg": 45,
+      "watertight": true,
+      "connected_components": 1,
+      "bounds_mm": [
+        [
+          0.0,
+          -25.0,
+          -32.0
+        ],
+        [
+          69.9828,
+          25.0,
+          33.8198
+        ]
+      ],
+      "volume_cm3": 132.967,
+      "board_hole_centre_max_error_mm": 4.144397139562396e-05,
+      "motor_lateral_clearance_mm": 5.75,
+      "camera_back_centre_mm": [
+        43.81981,
+        0.0,
+        2.0
+      ],
+      "optical_direction": [
+        0.707107,
+        0.0,
+        -0.707107
+      ],
+      "camera_envelope_overlap_mm3": -1.1008104425387766e-13,
+      "camera_side_unchanged_from_revision": 2,
+      "camera_side_difference_volume_mm3": 6.697102531030303e-05,
+      "insert_bore_printed_at_full_size": true,
+      "root_section_at_x8_area_mm2": 3145.052,
+      "old_root_section_at_x8_area_mm2": 339.18,
+      "root_section_area_ratio": 9.273,
+      "physical_fit_verified": false,
+      "print_dimensions_mm": [
+        69.983,
+        65.82,
+        50.0
+      ],
+      "printability": {
+        "first_layer_area_mm2": 2714.8,
+        "first_layer_connected_components": 1,
+        "maximum_short_bridge_span_mm": 2.828,
+        "overhang_roof_angle_deg": 60,
+        "round_insert_hole_roofs_present": true,
+        "slicer_verified": true,
+        "slicer": "PrusaSlicer-2.8.1+linux-x64-GTK3-202409181416 based on Slic3r (with GUI support)",
+        "layer_count": 250,
+        "generated_support_toolpaths": 0
+      }
+    }
+  ]
+}
